@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from contextlib import contextmanager
 import re
+from typing import Mapping
 
 from docx import Document
 from plasTeX import Command, Environment
 from plasTeX.DOM import Text
 
 from .docx_ext import DocxEmitterBackend
-from .model import EquationSpec, LinkTarget, StyleState, TextSpan
+from .model import EquationSpec, LinkTarget, RenderContext, SpanCompositor
 
 
 class LatexBridge:
@@ -74,6 +75,7 @@ class LatexBridge:
             },
         }
         self.emitter = DocxEmitterBackend(self.context)
+        self._span_compositor = SpanCompositor()
 
     def reset_document(self, template_path=None, *, keep_template_content=False):
         self.doc = Document(template_path) if template_path else Document()
@@ -82,6 +84,7 @@ class LatexBridge:
         self._current_paragraph = None
         self._next_body_role = "first_body"
         self.emitter = DocxEmitterBackend(self.context)
+        self._span_compositor = SpanCompositor()
 
     def _clear_main_content(self):
         body = self.doc._element.body
@@ -277,22 +280,22 @@ class LatexBridge:
             return "command"
         return "other"
 
-    def _walk(self, nodes, style=None):
-        active_style = dict(style) if style else {}
+    def _walk(self, nodes, render_context: RenderContext | Mapping[str, object] | None = None):
+        active_ctx = self._coerce_render_context(render_context)
         for node in nodes:
             kind = self._node_kind(node)
 
             if kind == "text":
-                self._append_node_text(node, active_style)
+                self._append_node_text(node, active_ctx)
                 continue
 
             name = self._node_name(node)
             special_text = self._special_text_for_node(name)
             if special_text is not None:
-                self._append_text(special_text, active_style)
+                self._append_text(special_text, context=active_ctx)
                 continue
             if name in {"#document", "document"}:
-                self._walk(self._node_children(node), active_style)
+                self._walk(self._node_children(node), active_ctx)
                 continue
             if name == "par":
                 paragraph = self._active_paragraph()
@@ -304,19 +307,19 @@ class LatexBridge:
                     self.context["_preserve_paragraph_once"] = False
                 if not preserve_current:
                     self._flush_paragraph()
-                self._walk(self._node_children(node), active_style)
+                self._walk(self._node_children(node), active_ctx)
                 self._flush_paragraph()
                 continue
 
             children = self._node_children(node)
             declaration_style = self._declaration_styles.get(name)
             if declaration_style is not None:
-                active_style = {**active_style, **declaration_style}
+                active_ctx = active_ctx.apply_style_delta(declaration_style)
                 if children:
-                    self._walk(children, active_style)
+                    self._walk(children, active_ctx)
                 continue
             if name in self._inline_styles:
-                self._walk(children, {**active_style, **self._inline_styles[name]})
+                self._walk(children, active_ctx.apply_style_delta(self._inline_styles[name]))
                 continue
 
             handler_entry = self.command_handlers.get(name)
@@ -324,10 +327,10 @@ class LatexBridge:
                 handler, inline_mode = handler_entry
                 if not inline_mode:
                     self._flush_paragraph()
-                with self.render_frame(style=active_style):
+                with self.render_frame(style=active_ctx):
                     handler(node)
                 if not inline_mode:
-                    self._walk(children, active_style)
+                    self._walk(children, active_ctx)
                     self._flush_paragraph()
                 continue
 
@@ -338,10 +341,10 @@ class LatexBridge:
                 self._flush_paragraph()
                 continue
 
-            self._walk(children, active_style)
+            self._walk(children, active_ctx)
 
     def render_nodes(self, nodes, style=None):
-        self._walk(list(nodes or []), style=style)
+        self._walk(list(nodes or []), render_context=style)
 
     def render_latex_fragment(self, tex_source: str, *, paragraph=None, style=None):
         """
@@ -357,7 +360,7 @@ class LatexBridge:
         parsed = tex.parse()
         nodes = self._root_nodes(parsed)
         with self.render_frame(paragraph=paragraph):
-            self._walk(nodes, style=style)
+            self._walk(nodes, render_context=style)
 
     @contextmanager
     def render_frame(self, *, paragraph=None, link=None, style=None):
@@ -365,7 +368,7 @@ class LatexBridge:
         if paragraph is not None:
             frame["paragraph"] = paragraph
         if style is not None:
-            frame["style"] = style
+            frame["render_context"] = self._coerce_render_context(style)
         self._render_stack.append(frame)
         link_target = LinkTarget.from_value(link)
         if link_target is None:
@@ -385,6 +388,21 @@ class LatexBridge:
             if key in frame:
                 return frame[key]
         return None
+
+    def _active_render_context(self) -> RenderContext:
+        current = self._active_frame_value("render_context")
+        if isinstance(current, RenderContext):
+            return current
+        return RenderContext()
+
+    def _coerce_render_context(
+        self, value: RenderContext | Mapping[str, object] | None
+    ) -> RenderContext:
+        if isinstance(value, RenderContext):
+            return value
+        if isinstance(value, Mapping):
+            return RenderContext.from_style_mapping(value, fallback=self._active_render_context())
+        return self._active_render_context()
 
     def _special_text_for_node(self, node_name: str):
         # LaTeX tie (`~`) should render as a non-breaking space.
@@ -494,7 +512,7 @@ class LatexBridge:
 
         return self.get_node_text(node)
 
-    def _append_node_text(self, node, style):
+    def _append_node_text(self, node, render_context: RenderContext):
         text = str(node).replace("\n", " ")
         if self.context.get("_trim_next_leading_space_once"):
             text = text.lstrip(" ")
@@ -510,7 +528,7 @@ class LatexBridge:
             if paragraph.runs[-1].text.endswith(" "):
                 return
             text = " "
-        self._append_text(text, style)
+        self._append_text(text, context=render_context)
 
     def _ensure_paragraph(self):
         if self._active_frame_value("paragraph") is not None:
@@ -532,16 +550,24 @@ class LatexBridge:
             self.doc, role=role, style_table=self.style_table
         )
 
-    def _append_text(self, text, style):
+    def _append_text(
+        self,
+        text,
+        style: Mapping[str, object] | None = None,
+        *,
+        role: str | None = None,
+        context: RenderContext | None = None,
+    ):
         self._ensure_paragraph()
         paragraph = self._active_paragraph()
         if paragraph is None:
             return
-        style_map = style or {}
-        span = TextSpan(
-            text=text,
-            style=self._style_from_mapping(style_map),
-            char_role=style_map.get("char_role"),
+        base_ctx = context or self._active_render_context()
+        span = self._span_compositor.compose(
+            text,
+            base=base_ctx,
+            style_delta=style,
+            role=role,
         )
         self.emitter.emit_span(paragraph, span)
 
@@ -552,13 +578,10 @@ class LatexBridge:
         self._current_paragraph = None
 
     def append_inline(self, text, style=None):
-        self._append_text(text, style or {})
+        self._append_text(text, style)
 
     def emit_text(self, text, *, style=None, role: str | None = None):
-        style_map = dict(style or {})
-        if role:
-            style_map["char_role"] = role
-        self._append_text(text, style_map)
+        self._append_text(text, style, role=role)
 
     def append_math(self, latex_str):
         self._ensure_paragraph()
@@ -567,7 +590,7 @@ class LatexBridge:
             return
         if self.emitter.has_active_link():
             # DOCX hyperlinks don't safely embed OMML; keep math text visible.
-            self._append_text(latex_str, {"theme": "minor"})
+            self._append_text(latex_str, {"theme": "minor"}, context=RenderContext())
             return
         self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str))
 
@@ -582,12 +605,3 @@ class LatexBridge:
             paragraph = self.emitter.begin_paragraph(self.doc, role=None, style_table=None)
         self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str, number=number))
         return paragraph
-
-    def _style_from_mapping(self, style: dict) -> StyleState:
-        return StyleState(
-            theme=str(style.get("theme", "minor")),
-            bold=bool(style.get("bold", False)),
-            italic=bool(style.get("italic", False)),
-            small_caps=bool(style.get("small_caps", False)),
-            monospace=bool(style.get("monospace", False)),
-        )

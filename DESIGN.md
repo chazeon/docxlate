@@ -79,6 +79,23 @@ To avoid nesting-order bugs (e.g., `\textbf{\href{...}{...}}` vs `\href{...}{\te
 - **Compositor**: convert intent + resolved style state into ordered inline spans/runs.
 - **DOCX backend**: emit spans using `python-docx` first; use isolated OOXML extension points only where API support is missing.
 
+#### 6.1.1 Boundary-Safe Render Context Contract
+Core traversal uses typed context objects rather than plain dict threading:
+- `RenderContext`
+  - `style: StyleState` (resolved inline state at current point)
+  - `char_role: Optional[str]` (character style role)
+  - `para_role: Optional[str]` (paragraph semantic role; used when paragraph emission hooks need it)
+- `SpanCompositor`
+  - Input: `text + base RenderContext + optional style delta + optional char role override`
+  - Output: `TextSpan(style, char_role)` for backend emission.
+
+Boundary rules:
+- Entering a group/child walk pushes a derived `RenderContext`; leaving pops automatically by recursion return.
+- Declaration commands (e.g., `\bfseries`) mutate the current sibling-stream context (left-to-right) and therefore affect following siblings in the same scope.
+- Inline commands (e.g., `\textbf{...}`) derive a child-only context and do not mutate sibling-stream context.
+- `render_frame(style=...)` accepts mapping or typed context; mappings are composited against the active frame context.
+- Backends do not infer style inheritance; they only emit already-resolved `TextSpan`.
+
 Planned backend API surface:
 - `begin_paragraph(role)` / `end_paragraph()`
 - `emit_text(text, style_state)`
