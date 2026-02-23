@@ -324,7 +324,8 @@ class LatexBridge:
                 handler, inline_mode = handler_entry
                 if not inline_mode:
                     self._flush_paragraph()
-                handler(node)
+                with self.render_frame(style=active_style):
+                    handler(node)
                 if not inline_mode:
                     self._walk(children, active_style)
                     self._flush_paragraph()
@@ -359,12 +360,14 @@ class LatexBridge:
             self._walk(nodes, style=style)
 
     @contextmanager
-    def render_frame(self, *, paragraph=None, link=None):
+    def render_frame(self, *, paragraph=None, link=None, style=None):
         frame = {}
         if paragraph is not None:
             frame["paragraph"] = paragraph
         if link is not None:
             frame["link"] = link
+        if style is not None:
+            frame["style"] = style
         self._render_stack.append(frame)
         try:
             yield

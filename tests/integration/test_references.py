@@ -71,3 +71,27 @@ def test_href_preserves_nested_bold_style():
     xml = para._element.xml
     assert "w:hyperlink" in xml
     assert "<w:b/>" in xml or "<w:b " in xml
+
+
+def test_href_preserves_outer_bold_style():
+    latex.run(r"\textbf{\href{https://example.com}{Name Here}}")
+
+    para = latex.doc.paragraphs[0]
+    assert "Name Here" in para.text
+    xml = para._element.xml
+    assert "w:hyperlink" in xml
+    assert "<w:b/>" in xml or "<w:b " in xml
+
+
+def test_href_bold_equivalent_for_both_nesting_orders():
+    latex.run(
+        r"\href{https://example.com}{\textbf{Inner Bold}} "
+        r"\textbf{\href{https://example.com}{Outer Bold}}"
+    )
+    para = latex.doc.paragraphs[0]
+    assert "Inner Bold" in para.text
+    assert "Outer Bold" in para.text
+    xml = para._element.xml
+    # Both links should keep bold formatting regardless of nesting order.
+    assert xml.count("<w:hyperlink") >= 2
+    assert xml.count("<w:b/>") + xml.count("<w:b ") >= 2
