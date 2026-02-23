@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
-from .hyperlink import _emit_linked_span
+from .hyperlink import HyperlinkWriter
 from .run_style import apply_text_span_style
 
 
@@ -16,6 +16,7 @@ class DocxEmitterBackend:
     def __init__(self, context: dict):
         self.context = context
         self._active_link: LinkTarget | None = None
+        self._hyperlinks = HyperlinkWriter()
 
     def begin_paragraph(
         self,
@@ -74,7 +75,7 @@ class DocxEmitterBackend:
         apply_text_span_style(run, span)
 
     def _emit_linked_span(self, paragraph, span: TextSpan, link: LinkTarget):
-        if not _emit_linked_span(paragraph, span, link):
+        if not self._hyperlinks.emit_span(paragraph, span, link):
             self._emit_plain_span(paragraph, span)
 
     def _warn_missing_math_xsl(self):
