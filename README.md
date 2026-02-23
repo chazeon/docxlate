@@ -97,19 +97,19 @@ title_render_policy: explicit
 parse_skip_packages:
   - fontspec
   - expl3
-mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL
+mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
 ```
 
 ## Math Conversion
 
 Math uses `latex2mathml` + XSL transform to OMML.
 
-You must provide `mathml2omml_xsl_path` via config/context. If missing, math falls back to text marker and warning.
+You must provide `mathml2omml_xsl_path` via config/context. If missing, math falls back to raw MathML text and warning.
 
-Note: `MML2OMML.XSL` is commonly available from local Microsoft Office installations; it is not bundled by this project. On macOS, a common path is:
+Note: `mathml2omml.xsl` is commonly available from local Microsoft Office installations; it is not bundled by this project. On macOS, a common path is:
 
 ```text
-/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL
+/Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
 ```
 
 ## Notes on Parsing
