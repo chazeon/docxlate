@@ -25,7 +25,13 @@ class And(Command):
     args = ""
 
 
+class Color(Command):
+    macroName = "color"
+    args = "color:str"
+
+
 latex.macro("and", And)
+latex.macro("color", Color)
 
 
 def _bibliography_layout_settings() -> dict:

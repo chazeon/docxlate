@@ -130,7 +130,7 @@ Color handling policy:
 - Track color as part of inline `StyleState` and resolve it during walk-time scope composition.
 - Apply resolved color directly to text runs (`w:rPr/w:color`) in backend emission.
 - For math, color must be propagated through math emission (OMML math run properties), not only text run properties.
-- Current temporary gap: math-color parity is deferred; keep explicit regression coverage (xfail) until OMML color propagation lands.
+- Current temporary gap: math-color parity is deferred; text-run color declarations are implemented.
 
 ### 7. Figure and Float Handling
 - Parse `figure` and `wrapfigure` environments as first-class content blocks.

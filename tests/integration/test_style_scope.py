@@ -1,5 +1,3 @@
-import pytest
-
 from docxlate.handlers import latex
 
 
@@ -42,11 +40,11 @@ def test_inline_style_composes_with_declaration_scope():
     assert any("C" in run.text and run.bold and not run.italic for run in runs)
 
 
-@pytest.mark.xfail(reason="Color declaration semantics are not implemented yet")
 def test_color_declaration_affects_following_text_only():
     latex.run(r"{A \color{red} B} C")
     para = latex.doc.paragraphs[0]
-    xml = para._element.xml
+    runs = _nonempty_runs(para)
     assert "A" in para.text and "B" in para.text and "C" in para.text
-    # Target behavior: only B gets red color inside the local group.
-    assert xml.count("<w:color") >= 1
+    assert any("A" in run.text and run.font.color.rgb is None for run in runs)
+    assert any("B" in run.text and run.font.color.rgb is not None for run in runs)
+    assert any("C" in run.text and run.font.color.rgb is None for run in runs)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import RGBColor
 
 from docxlate.model import TextSpan
 from docxlate.utils import apply_theme_font
@@ -17,6 +18,11 @@ def apply_text_span_style(run, span: TextSpan):
         run.italic = True
     if span.style.small_caps:
         run.font.small_caps = True
+    if span.style.color:
+        try:
+            run.font.color.rgb = RGBColor.from_string(span.style.color)
+        except Exception:
+            pass
 
 
 def new_run_properties_for_span(span: TextSpan, *, default_char_role: str | None = None):
@@ -32,6 +38,10 @@ def new_run_properties_for_span(span: TextSpan, *, default_char_role: str | None
         r_pr.append(OxmlElement("w:i"))
     if span.style.small_caps:
         r_pr.append(OxmlElement("w:smallCaps"))
+    if span.style.color:
+        color = OxmlElement("w:color")
+        color.set(qn("w:val"), span.style.color)
+        r_pr.append(color)
     r_pr.append(_new_fonts_element(span))
     return r_pr
 

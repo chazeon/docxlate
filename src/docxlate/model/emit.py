@@ -10,6 +10,7 @@ class StyleState:
     italic: bool = False
     small_caps: bool = False
     monospace: bool = False
+    color: str | None = None
 
 
 @dataclass

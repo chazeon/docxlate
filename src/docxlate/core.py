@@ -315,7 +315,7 @@ class LatexBridge:
                 continue
 
             children = self._node_children(node)
-            declaration_style = self._declaration_styles.get(name)
+            declaration_style = self._declaration_style_for_node(node, name)
             if declaration_style is not None:
                 active_ctx = active_ctx.apply_style_delta(declaration_style)
                 if children:
@@ -425,6 +425,27 @@ class LatexBridge:
         if node_name in literal_map:
             return literal_map[node_name]
         return None
+
+    def _declaration_style_for_node(self, node, name: str):
+        static = self._declaration_styles.get(name)
+        if static is not None:
+            return static
+        if name != "color":
+            return None
+        color_spec = self.get_arg_text(node, 0, key="color")
+        if not color_spec:
+            source = getattr(node, "source", None)
+            if source:
+                match = re.search(
+                    r"\\color\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}",
+                    str(source),
+                    flags=re.S,
+                )
+                if match:
+                    color_spec = match.group(1).strip()
+        if not color_spec:
+            return None
+        return {"color": color_spec}
 
     def save(self, filename):
         self.doc.save(filename)
