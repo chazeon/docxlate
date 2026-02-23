@@ -344,6 +344,11 @@ def handle_noindent(_node):
     latex.request_noindent()
 
 
+@latex.command("indent", inline=True)
+def handle_indent(_node):
+    latex.request_indent()
+
+
 @latex.command("paragraph", inline=True)
 def handle_paragraph(node):
     """Render LaTeX \\paragraph as a run-in heading."""

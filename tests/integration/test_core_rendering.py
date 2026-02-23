@@ -250,6 +250,22 @@ def test_noindent_applies_once_then_resets():
     assert 'w:firstLine="0"' not in nonempty[1]._element.xml
 
 
+def test_indent_overrides_pending_noindent_before_text():
+    latex.run(r"\noindent \indent First line.")
+    para = next((p for p in latex.doc.paragraphs if "First line." in p.text), None)
+    assert para is not None
+    assert 'w:firstLine="0"' not in para._element.xml
+
+
+def test_indent_applies_to_next_paragraph_only():
+    latex.run(r"\noindent First.\par \indent Second.\par Third.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    assert len(nonempty) >= 3
+    assert 'w:firstLine="0"' in nonempty[0]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[1]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[2]._element.xml
+
+
 @pytest.mark.parametrize(
     "policy,metadata_in_body,has_maketitle,expect_title",
     [

@@ -546,22 +546,35 @@ class LatexBridge:
                 role=role,
                 style_table=self.style_table,
             )
-            self._consume_noindent_once(self._current_paragraph)
+            self._consume_first_line_intent_once(self._current_paragraph)
             if self._active_render_context().para_role is None:
                 self._next_body_role = "body"
 
     def request_noindent(self):
         paragraph = self._active_paragraph()
         if paragraph is not None and not any(run.text.strip() for run in paragraph.runs):
-            self._consume_noindent_once(paragraph)
+            paragraph.paragraph_format.first_line_indent = Pt(0)
+            self.context["_first_line_intent_once"] = None
             return
-        self.context["_noindent_once"] = True
+        self.context["_first_line_intent_once"] = "noindent"
 
-    def _consume_noindent_once(self, paragraph):
-        if not self.context.get("_noindent_once"):
+    def request_indent(self):
+        paragraph = self._active_paragraph()
+        if paragraph is not None and not any(run.text.strip() for run in paragraph.runs):
+            paragraph.paragraph_format.first_line_indent = None
+            self.context["_first_line_intent_once"] = None
             return
-        paragraph.paragraph_format.first_line_indent = Pt(0)
-        self.context["_noindent_once"] = False
+        self.context["_first_line_intent_once"] = "indent"
+
+    def _consume_first_line_intent_once(self, paragraph):
+        intent = self.context.get("_first_line_intent_once")
+        if not intent:
+            return
+        if intent == "noindent":
+            paragraph.paragraph_format.first_line_indent = Pt(0)
+        elif intent == "indent":
+            paragraph.paragraph_format.first_line_indent = None
+        self.context["_first_line_intent_once"] = None
 
     def mark_next_body_paragraph_first(self):
         self._next_body_role = "first_body"
