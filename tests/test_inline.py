@@ -46,7 +46,10 @@ def test_inline_math_uses_omml_runs():
     assert len(latex.doc.paragraphs) == 1
     para = latex.doc.paragraphs[0]
     xml = para._element.xml
-    assert xml.count("<m:oMath") >= 2 or para.text.count("<math") >= 2
+    if para.text.count("<math") >= 2:
+        return
+    assert xml.count("<m:oMath") >= 2
+    assert "<m:oMathPara" not in xml
 
 
 def test_non_breaking_space_tie_is_preserved():

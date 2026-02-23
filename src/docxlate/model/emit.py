@@ -42,3 +42,4 @@ class EquationSpec:
     latex: str
     number: str | None = None
     color: str | None = None
+    display: bool = True

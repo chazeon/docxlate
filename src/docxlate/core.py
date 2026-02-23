@@ -646,7 +646,7 @@ class LatexBridge:
             self._append_text(latex_str, fallback_style, context=RenderContext())
             return
         self.emitter.emit_equation(
-            paragraph, EquationSpec(latex=latex_str, color=active_color)
+            paragraph, EquationSpec(latex=latex_str, color=active_color, display=False)
         )
 
     def emit_equation(
@@ -666,6 +666,11 @@ class LatexBridge:
             )
         self.emitter.emit_equation(
             paragraph,
-            EquationSpec(latex=latex_str, number=number, color=active_color),
+            EquationSpec(
+                latex=latex_str,
+                number=number,
+                color=active_color,
+                display=True,
+            ),
         )
         return paragraph

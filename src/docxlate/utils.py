@@ -37,6 +37,7 @@ def inject_omml(
     *,
     xsl_path: str | Path | None = None,
     color: str | None = None,
+    display: bool = False,
 ):
     """Bridge LaTeX math to Word Math (OMML) via the provided stylesheet."""
     try:
@@ -53,7 +54,10 @@ def inject_omml(
             _normalize_omml_script_bases(omml_result)
         except Exception:
             pass
-        omml_xml = etree.tostring(omml_result, encoding="utf-8")
+        omml_node = _coerce_omml_node(omml_result)
+        if display:
+            omml_node = _wrap_display_omath(omml_node)
+        omml_xml = etree.tostring(omml_node, encoding="utf-8")
         paragraph._element.append(parse_xml(omml_xml))
         return True
     except Exception:
@@ -88,3 +92,20 @@ def _apply_text_run_color(run, color: str | None) -> None:
         run.font.color.rgb = RGBColor.from_string(color)
     except Exception:
         return
+
+
+def _coerce_omml_node(omml_root):
+    if hasattr(omml_root, "getroot"):
+        return omml_root.getroot()
+    return omml_root
+
+
+def _wrap_display_omath(node):
+    # Word-native block equations are serialized as m:oMathPara.
+    if node.tag == f"{{{OMML_NAMESPACE}}}oMathPara":
+        return node
+    if node.tag != f"{{{OMML_NAMESPACE}}}oMath":
+        return node
+    para = etree.Element(f"{{{OMML_NAMESPACE}}}oMathPara")
+    para.append(node)
+    return para

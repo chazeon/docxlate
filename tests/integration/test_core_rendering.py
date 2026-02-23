@@ -52,7 +52,9 @@ def test_equation_block_math_injected_or_fallback():
     latex.run(r"\begin{equation}E=mc^2\end{equation}")
 
     para_xml = latex.doc.paragraphs[0]._element.xml
-    assert "<m:oMath" in para_xml or "<math" in latex.doc.paragraphs[0].text
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    assert "<m:oMathPara" in para_xml
 
 
 def test_equation_with_labeled_aux_number_is_emitted():
