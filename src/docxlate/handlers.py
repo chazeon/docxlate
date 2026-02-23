@@ -396,7 +396,7 @@ def handle_math(node):
         if resolved_number is None and ref_text is not None:
             resolved_number = str(ref_text)
     source = re.sub(r"\\label\{[^}]+\}", "", source).strip()
-    equation_ctx = RenderContext().with_para_role("equation")
+    equation_ctx = latex.get_active_render_context().with_para_role("equation")
     with latex.render_frame(style=equation_ctx):
         p = latex.emit_equation(source, number=resolved_number)
     if resolver is not None:

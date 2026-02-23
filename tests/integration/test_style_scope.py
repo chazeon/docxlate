@@ -48,3 +48,12 @@ def test_color_declaration_affects_following_text_only():
     assert any("A" in run.text and run.font.color.rgb is None for run in runs)
     assert any("B" in run.text and run.font.color.rgb is not None for run in runs)
     assert any("C" in run.text and run.font.color.rgb is None for run in runs)
+
+
+def test_color_declaration_applies_to_inline_math_and_not_following_text():
+    latex.run(r"{\color{red} $x$} Y")
+    para = latex.doc.paragraphs[0]
+    runs = _nonempty_runs(para)
+    assert "Y" in para.text
+    assert "FF0000" in para._element.xml
+    assert any("Y" in run.text and run.font.color.rgb is None for run in runs)

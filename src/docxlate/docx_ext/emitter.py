@@ -58,7 +58,7 @@ class DocxEmitterBackend:
 
     def emit_equation(self, paragraph, spec: EquationSpec):
         xsl_path = self.context.get("mathml2omml_xsl_path")
-        ok = inject_omml(paragraph, spec.latex, xsl_path=xsl_path)
+        ok = inject_omml(paragraph, spec.latex, xsl_path=xsl_path, color=spec.color)
         if not ok and not xsl_path:
             self._warn_missing_math_xsl()
         if spec.number:

@@ -283,7 +283,9 @@ class LatexBridge:
             return "command"
         return "other"
 
-    def _walk(self, nodes, render_context: RenderContext | Mapping[str, object] | None = None):
+    def _walk(
+        self, nodes, render_context: RenderContext | Mapping[str, object] | None = None
+    ) -> RenderContext:
         active_ctx = self._coerce_render_context(render_context)
         for node in nodes:
             kind = self._node_kind(node)
@@ -298,7 +300,7 @@ class LatexBridge:
                 self._append_text(special_text, context=active_ctx)
                 continue
             if name in {"#document", "document"}:
-                self._walk(self._node_children(node), active_ctx)
+                active_ctx = self._walk(self._node_children(node), active_ctx)
                 continue
             if name == "par":
                 paragraph = self._active_paragraph()
@@ -310,7 +312,7 @@ class LatexBridge:
                     self.context["_preserve_paragraph_once"] = False
                 if not preserve_current:
                     self._flush_paragraph()
-                self._walk(self._node_children(node), active_ctx)
+                active_ctx = self._walk(self._node_children(node), active_ctx)
                 self._flush_paragraph()
                 continue
 
@@ -340,11 +342,13 @@ class LatexBridge:
             env_handler = self.env_handlers.get(name)
             if env_handler:
                 self._flush_paragraph()
-                env_handler(node)
+                with self.render_frame(style=active_ctx):
+                    env_handler(node)
                 self._flush_paragraph()
                 continue
 
             self._walk(children, active_ctx)
+        return active_ctx
 
     def render_nodes(self, nodes, style=None):
         self._walk(list(nodes or []), render_context=style)
@@ -433,16 +437,6 @@ class LatexBridge:
         if name != "color":
             return None
         color_spec = self.get_arg_text(node, 0, key="color")
-        if not color_spec:
-            source = getattr(node, "source", None)
-            if source:
-                match = re.search(
-                    r"\\color\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}",
-                    str(source),
-                    flags=re.S,
-                )
-                if match:
-                    color_spec = match.group(1).strip()
         if not color_spec:
             return None
         return {"color": color_spec}
@@ -643,11 +637,17 @@ class LatexBridge:
         paragraph = self._active_paragraph()
         if paragraph is None:
             return
+        active_color = self._active_render_context().style.color
         if self.emitter.has_active_link():
             # DOCX hyperlinks don't safely embed OMML; keep math text visible.
-            self._append_text(latex_str, {"theme": "minor"}, context=RenderContext())
+            fallback_style = {"theme": "minor"}
+            if active_color:
+                fallback_style["color"] = active_color
+            self._append_text(latex_str, fallback_style, context=RenderContext())
             return
-        self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str))
+        self.emitter.emit_equation(
+            paragraph, EquationSpec(latex=latex_str, color=active_color)
+        )
 
     def emit_equation(
         self,
@@ -656,11 +656,16 @@ class LatexBridge:
         number: str | None = None,
         paragraph=None,
         para_role: str | None = None,
+        color: str | None = None,
     ):
+        active_color = color if color is not None else self._active_render_context().style.color
         if paragraph is None:
             role = para_role or self._active_render_context().para_role
             paragraph = self.emitter.begin_paragraph(
                 self.doc, role=role, style_table=self.style_table
             )
-        self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str, number=number))
+        self.emitter.emit_equation(
+            paragraph,
+            EquationSpec(latex=latex_str, number=number, color=active_color),
+        )
         return paragraph
