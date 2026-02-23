@@ -1,3 +1,5 @@
+import pytest
+
 from docxlate.handlers import latex
 
 
@@ -95,3 +97,8 @@ def test_href_bold_equivalent_for_both_nesting_orders():
     # Both links should keep bold formatting regardless of nesting order.
     assert xml.count("<w:hyperlink") >= 2
     assert xml.count("<w:b/>") + xml.count("<w:b ") >= 2
+
+
+def test_nested_hyperlinks_raise_error():
+    with pytest.raises(RuntimeError, match="Nested hyperlinks are not supported"):
+        latex.run(r"\href{https://a.example}{Outer \href{https://b.example}{Inner}}")

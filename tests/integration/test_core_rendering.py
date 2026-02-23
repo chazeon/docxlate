@@ -55,6 +55,22 @@ def test_equation_block_math_injected_or_fallback():
     assert "<m:oMath" in para_xml or "<math" in latex.doc.paragraphs[0].text
 
 
+def test_equation_with_labeled_aux_number_is_emitted():
+    latex.context["refs"] = {"eq:emc": {"ref_num": "1.2"}}
+    latex.run(r"\begin{equation}E=mc^2\label{eq:emc}\end{equation}")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "(1.2)" in text
+
+
+def test_equation_without_labeled_aux_number_has_no_emitted_number():
+    latex.context["refs"] = {}
+    latex.run(r"\begin{equation}E=mc^2\label{eq:missing}\end{equation}")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "(1.2)" not in text
+
+
 def test_section_body_text_is_rendered_with_plastex():
     latex.run(r"\section{Introduction} Hello world.")
 

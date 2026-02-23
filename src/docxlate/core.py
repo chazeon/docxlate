@@ -5,13 +5,11 @@ from contextlib import contextmanager
 import re
 
 from docx import Document
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from plasTeX import Command, Environment
 from plasTeX.DOM import Text
 
-from .utils import apply_theme_font, inject_omml
+from .docx_ext import DocxEmitterBackend
+from .model import EquationSpec, LinkTarget, StyleState, TextSpan
 
 
 class LatexBridge:
@@ -75,6 +73,7 @@ class LatexBridge:
                 "monospace": False,
             },
         }
+        self.emitter = DocxEmitterBackend(self.context)
 
     def reset_document(self, template_path=None, *, keep_template_content=False):
         self.doc = Document(template_path) if template_path else Document()
@@ -82,6 +81,7 @@ class LatexBridge:
             self._clear_main_content()
         self._current_paragraph = None
         self._next_body_role = "first_body"
+        self.emitter = DocxEmitterBackend(self.context)
 
     def _clear_main_content(self):
         body = self.doc._element.body
@@ -365,7 +365,9 @@ class LatexBridge:
         if paragraph is not None:
             frame["paragraph"] = paragraph
         if link is not None:
-            frame["link"] = link
+            link_target = self._link_from_frame(link)
+            frame["link"] = link_target
+            self.emitter.begin_link(link_target)
         if style is not None:
             frame["style"] = style
         self._render_stack.append(frame)
@@ -373,6 +375,8 @@ class LatexBridge:
             yield
         finally:
             self._render_stack.pop()
+            if link is not None:
+                self.emitter.end_link()
 
     def _active_frame_value(self, key):
         for frame in reversed(self._render_stack):
@@ -512,10 +516,9 @@ class LatexBridge:
         if self._current_paragraph is None:
             role = self._next_body_role
             style_name = self._resolve_paragraph_style(role)
-            if style_name:
-                self._current_paragraph = self.doc.add_paragraph(style=style_name)
-            else:
-                self._current_paragraph = self.doc.add_paragraph()
+            self._current_paragraph = self.emitter.begin_paragraph(
+                self.doc, role=role, style_name=style_name
+            )
             self._next_body_role = "body"
 
     def _resolve_paragraph_style(self, role):
@@ -539,84 +542,49 @@ class LatexBridge:
 
     def add_paragraph_for_role(self, role):
         style_name = self._resolve_paragraph_style(role)
-        if style_name:
-            return self.doc.add_paragraph(style=style_name)
-        return self.doc.add_paragraph()
+        return self.emitter.begin_paragraph(self.doc, role=role, style_name=style_name)
 
     def _append_text(self, text, style):
         self._ensure_paragraph()
         paragraph = self._active_paragraph()
         if paragraph is None:
             return
-        link = self._active_frame_value("link")
-        if link is not None:
-            self._append_hyperlink_run(paragraph, text, link, style or {})
-            return
-        run = paragraph.add_run(text)
-        apply_theme_font(run, style.get("theme", "minor"))
-        if style.get("monospace"):
-            run.font.name = "Courier New"
-        if style.get("bold"):
-            run.bold = True
-        if style.get("italic"):
-            run.italic = True
-        if style.get("small_caps"):
-            run.font.small_caps = True
+        style_map = style or {}
+        span = TextSpan(
+            text=text,
+            style=self._style_from_mapping(style_map),
+            char_role=style_map.get("char_role"),
+        )
+        self.emitter.emit_span(paragraph, span)
 
     def _active_paragraph(self):
         return self._active_frame_value("paragraph") or self._current_paragraph
 
     def _append_hyperlink_run(self, paragraph, text, link, style):
-        hyperlink = OxmlElement("w:hyperlink")
-        if link.get("anchor"):
-            hyperlink.set(qn("w:anchor"), link["anchor"])
-        elif link.get("url"):
-            rel_id = link.get("rel_id")
-            if rel_id is None:
-                rel_id = paragraph.part.relate_to(
-                    link["url"], RT.HYPERLINK, is_external=True
-                )
-                link["rel_id"] = rel_id
-            hyperlink.set(qn("r:id"), rel_id)
-        else:
-            run = paragraph.add_run(text)
-            apply_theme_font(run, style.get("theme", "minor"))
-            return
-
-        run = OxmlElement("w:r")
-        r_pr = OxmlElement("w:rPr")
-        r_style = OxmlElement("w:rStyle")
-        r_style.set(qn("w:val"), "Hyperlink")
-        r_pr.append(r_style)
-        if style.get("bold"):
-            r_pr.append(OxmlElement("w:b"))
-        if style.get("italic"):
-            r_pr.append(OxmlElement("w:i"))
-        if style.get("small_caps"):
-            r_pr.append(OxmlElement("w:smallCaps"))
-        r_fonts = OxmlElement("w:rFonts")
-        if style.get("monospace"):
-            r_fonts.set(qn("w:ascii"), "Courier New")
-            r_fonts.set(qn("w:hAnsi"), "Courier New")
-            r_fonts.set(qn("w:cs"), "Courier New")
-        else:
-            theme = style.get("theme", "minor")
-            val = "major" if theme == "major" else "minor"
-            r_fonts.set(qn("w:asciiTheme"), f"{val}Ascii")
-            r_fonts.set(qn("w:hAnsiTheme"), f"{val}HAnsi")
-        r_pr.append(r_fonts)
-        run.append(r_pr)
-        text_node = OxmlElement("w:t")
-        text_node.text = text
-        run.append(text_node)
-        hyperlink.append(run)
-        paragraph._p.append(hyperlink)
+        style_map = style or {}
+        span = TextSpan(
+            text=text,
+            style=self._style_from_mapping(style_map),
+            char_role=style_map.get("char_role"),
+        )
+        link_target = self._link_from_frame(link)
+        self.emitter.begin_link(link_target)
+        try:
+            self.emitter.emit_span(paragraph, span)
+        finally:
+            self.emitter.end_link()
 
     def _flush_paragraph(self):
         self._current_paragraph = None
 
     def append_inline(self, text, style=None):
         self._append_text(text, style or {})
+
+    def emit_text(self, text, *, style=None, role: str | None = None):
+        style_map = dict(style or {})
+        if role:
+            style_map["char_role"] = role
+        self._append_text(text, style_map)
 
     def append_math(self, latex_str):
         self._ensure_paragraph()
@@ -627,13 +595,41 @@ class LatexBridge:
             # DOCX hyperlinks don't safely embed OMML; keep math text visible.
             self._append_text(latex_str, {"theme": "minor"})
             return
-        xsl_path = self.context.get("mathml2omml_xsl_path")
-        ok = inject_omml(paragraph, latex_str, xsl_path=xsl_path)
-        if not ok and not xsl_path:
-            msg = (
-                "Math OMML stylesheet path is not configured "
-                "(set mathml2omml_xsl_path in config)."
-            )
-            warnings = self.context.setdefault("warnings", [])
-            if msg not in warnings:
-                warnings.append(msg)
+        self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str))
+
+    def emit_equation(
+        self,
+        latex_str: str,
+        *,
+        number: str | None = None,
+        paragraph=None,
+    ):
+        if paragraph is None:
+            paragraph = self.doc.add_paragraph()
+        self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str, number=number))
+        return paragraph
+
+    def _style_from_mapping(self, style: dict) -> StyleState:
+        return StyleState(
+            theme=str(style.get("theme", "minor")),
+            bold=bool(style.get("bold", False)),
+            italic=bool(style.get("italic", False)),
+            small_caps=bool(style.get("small_caps", False)),
+            monospace=bool(style.get("monospace", False)),
+        )
+
+    def _link_from_frame(self, link) -> LinkTarget | None:
+        if not link:
+            return None
+        if isinstance(link, LinkTarget):
+            return link
+        target = link.get("_target_obj")
+        if isinstance(target, LinkTarget):
+            return target
+        target = LinkTarget(
+            anchor=link.get("anchor"),
+            url=link.get("url"),
+            rel_id=link.get("rel_id"),
+        )
+        link["_target_obj"] = target
+        return target

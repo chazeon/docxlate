@@ -372,29 +372,21 @@ def handle_math(node):
     source = latex.get_math_source(node)
     resolver = getattr(latex, "reference_resolver", None)
     refs = latex.context.get("refs", {})
+    resolved_number: str | None = None
     for label_name in re.findall(r"\\label\{([^}]+)\}", source):
+        ref_info = refs.get(label_name, {})
+        ref_text = ref_info.get("ref_num")
+        if resolved_number is None and ref_text is not None:
+            resolved_number = str(ref_text)
         if resolver is not None:
             current_paragraph = latex._current_paragraph
             latex._current_paragraph = p
-            ref_info = refs.get(label_name, {})
-            ref_text = ref_info.get("ref_num")
             resolver.register_label(
-                latex,
-                label_name,
-                ref_text=str(ref_text) if ref_text is not None else None,
+                latex, label_name, ref_text=str(ref_text) if ref_text is not None else None
             )
             latex._current_paragraph = current_paragraph
     source = re.sub(r"\\label\{[^}]+\}", "", source).strip()
-    xsl_path = latex.context.get("mathml2omml_xsl_path")
-    ok = inject_omml(p, source, xsl_path=xsl_path)
-    if not ok and not xsl_path:
-        msg = (
-            "Math OMML stylesheet path is not configured "
-            "(set mathml2omml_xsl_path in config)."
-        )
-        warnings = latex.context.setdefault("warnings", [])
-        if msg not in warnings:
-            warnings.append(msg)
+    latex.emit_equation(source, number=resolved_number, paragraph=p)
 
 
 @latex.command("cite", inline=True)

@@ -53,10 +53,66 @@ Handlers are user-defined (or default) functions registered with `@latex.tag` an
 - **Output**: inject OMML into the document tree.
 - **Failure behavior**: if conversion fails, insert source math text and emit warning.
 
+### 5.1 Equation Number Emission Policy
+- **Source of truth**: labeled equation numbers come from LaTeX run artifacts (`.aux` label map), not local DOCX-side counters.
+- **Guaranteed behavior (current target)**:
+  - If an equation has `\label{...}` and aux contains its resolved number, emit that exact number (e.g., `1.2`, `3a`) in equation rendering.
+  - `\eqref`/reference rendering must use the same resolved label number for consistency.
+- **Out of scope (temporary)**:
+  - Deriving exact numbers for unlabeled equations without TeX artifacts.
+  - Full parity for custom class/package counter logic without a real TeX engine pass.
+- **Emitter hook point**:
+  - Display-equation handler (`equation` env renderer) is the single place where right-side equation number emission is attached.
+  - Layout implementation may use OMML equation-array alignment (`m:oMathPara`/`m:eqArr`) or an equivalent backend abstraction, but number text must come from resolved label metadata when available.
+- **Future UX note**:
+  - When labeled equation metadata is missing, emit warning diagnostics and (later) provide CLI guidance about compiling TeX to refresh aux data.
+
 ### 6. Styling and Theme Integration
 - Use Word theme fonts (Major/Minor) by default.
 - Central style mapping for headings, body text, code-like spans, and captions.
 - Keep style behavior deterministic and template-friendly.
+
+### 6.1 Inline Composition and Backend Boundary
+To avoid nesting-order bugs (e.g., `\textbf{\href{...}{...}}` vs `\href{...}{\textbf{...}}`), rendering is split into explicit layers:
+- **Intent events**: walker/handlers emit semantic intent (`link-start`, `link-end`, `text`, `math`, `citation`, heading/list roles).
+- **Style state stack**: maintain merged inline state (bold/italic/small-caps/monospace/color/etc.) with push/pop deltas per node scope.
+- **Compositor**: convert intent + resolved style state into ordered inline spans/runs.
+- **DOCX backend**: emit spans using `python-docx` first; use isolated OOXML extension points only where API support is missing.
+
+Planned backend API surface:
+- `begin_paragraph(role)` / `end_paragraph()`
+- `emit_text(text, style_state)`
+- `begin_link(target)` / `end_link()`
+- `emit_math(source, mode)`
+- `emit_image(spec)` / `begin_caption(role)` / `end_caption()`
+- `begin_list(kind, level)` / `emit_list_item()` / `end_list()`
+
+Caption content model:
+- Captions are structured containers, not plain-text-only fields.
+- Caption rendering must reuse normal inline pipeline so content like math, links, citations, and inline styles is preserved.
+
+OOXML usage policy:
+- Prefer `python-docx` for paragraph/run/style operations.
+- Keep direct OOXML manipulation in `docx_ext` modules only (hyperlinks, bookmarks, advanced numbering, OMML injection, floating anchors).
+- Core walker/handlers must not construct raw OOXML directly.
+
+Style resolution rules:
+- Semantic roles provide defaults (e.g., hyperlink role, heading role).
+- Inline macros apply partial deltas (set/unset only touched properties).
+- Final run properties are computed at emit time from merged state.
+- Run segmentation occurs only when effective style changes.
+
+Declaration semantics (walk-time):
+- Resolve declarations strictly left-to-right during traversal.
+- Declaration-style commands (e.g., `\color{...}`, `\bfseries`) affect only following siblings within current scope.
+- Group boundaries (`{ ... }`) push/pop style state; declarations do not retroactively affect prior text.
+- Backend emission must not infer or back-propagate style to already-emitted content.
+
+Color handling policy:
+- Track color as part of inline `StyleState` and resolve it during walk-time scope composition.
+- Apply resolved color directly to text runs (`w:rPr/w:color`) in backend emission.
+- For math, color must be propagated through math emission (OMML math run properties), not only text run properties.
+- Current temporary gap: math-color parity is deferred; keep explicit regression coverage (xfail) until OMML color propagation lands.
 
 ### 7. Figure and Float Handling
 - Parse `figure` and `wrapfigure` environments as first-class content blocks.
@@ -64,6 +120,11 @@ Handlers are user-defined (or default) functions registered with `@latex.tag` an
 - Render captions from `\caption{...}` with a consistent Word caption style.
 - Preserve figure labels for cross-reference integration (`\label` + `\ref`/`\autoref` paths).
 - In permissive mode, degrade gracefully when image files are missing (retain caption/text + warning).
+
+Figure numbering policy:
+- For referenced figures, displayed/reference figure numbers must come from LaTeX run artifacts (`.aux` label mapping), not local DOCX-side counters.
+- Figure references (`\ref{fig:...}`/related) must reuse the same resolved number source as caption numbering for consistency.
+- Unlabeled figure auto-number parity is not guaranteed in the temporary scope; diagnostics should prefer labeled-reference workflows.
 
 ## Dependency Plan
 - `plasTeX`: LaTeX parsing and macro/environment model.
