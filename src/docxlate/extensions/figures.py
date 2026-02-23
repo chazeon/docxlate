@@ -3,13 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx.oxml.ns import qn
-from docx.shared import Emu, Inches
+from docx.shared import Inches
 from plasTeX import Command, Environment
 
-from docxlate.docx_ext import (
-    convert_inline_drawing_to_wrapped_anchor,
-    insert_wrapped_caption_anchor,
-)
 from docxlate.model import RenderContext
 
 
@@ -165,8 +161,10 @@ def register(latex):
 
         paragraph = latex._active_paragraph()
         if paragraph is None:
-            paragraph = latex.doc.add_paragraph()
-            latex._current_paragraph = paragraph
+            latex._ensure_paragraph()
+            paragraph = latex._active_paragraph()
+        if paragraph is None:
+            return
 
         stack = latex.context.get("figure_stack", [])
         in_wrapfigure = bool(stack and stack[-1].get("kind") == "wrapfigure")
@@ -174,24 +172,22 @@ def register(latex):
         target_width_emu = _resolve_target_width_emu(latex, node, stack if in_wrapfigure else [])
 
         try:
-            run = paragraph.add_run()
-            run.add_picture(str(image_path), width=Emu(target_width_emu))
+            run = latex.emit_image(paragraph, str(image_path), width_emu=target_width_emu)
         except Exception:
-            run = paragraph.add_run()
-            run.add_picture(str(image_path))
+            run = latex.emit_image(paragraph, str(image_path))
 
         if in_wrapfigure:
-            drawing = run._r.find(qn("w:drawing"))
-            if drawing is not None:
-                anchor = convert_inline_drawing_to_wrapped_anchor(
-                    drawing, place=place, pos_y_emu=0
-                )
-                if anchor is not None:
-                    extent = anchor.find(qn("wp:extent"))
-                    if extent is not None and stack:
-                        stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
-                        stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
-                        stack[-1]["target_cx_emu"] = target_width_emu
+            anchor = latex.convert_image_run_to_wrap_anchor(
+                run,
+                place=place,
+                pos_y_emu=0,
+            )
+            if anchor is not None:
+                extent = anchor.find(qn("wp:extent"))
+                if extent is not None and stack:
+                    stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
+                    stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
+                    stack[-1]["target_cx_emu"] = target_width_emu
 
     @latex.command("caption", inline=True)
     def handle_caption(node):
@@ -212,8 +208,7 @@ def register(latex):
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
             box_cx = int(stack[-1].get("target_cx_emu", image_cx))
             caption_cy = _estimate_caption_box_height_emu(p.text, box_cx)
-            insert_wrapped_caption_anchor(
-                latex.doc,
+            latex.emit_wrapped_caption_anchor(
                 source_paragraph=p,
                 place=stack[-1].get("place"),
                 pos_y_emu=image_cy + 114300,
@@ -226,7 +221,7 @@ def register(latex):
         lines = latex.get_arg_text(node, 0, key="lines")
         place = latex.get_arg_text(node, 0, key="place")
         width = latex.get_arg_text(node, 1, key="width")
-        p = latex.doc.add_paragraph()
+        p = latex.add_paragraph_for_role("body")
         stack = latex.context.setdefault("figure_stack", [])
         stack.append({"kind": "wrapfigure", "place": place, "width": width, "lines": lines})
         try:

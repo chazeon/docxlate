@@ -674,3 +674,37 @@ class LatexBridge:
             ),
         )
         return paragraph
+
+    def emit_image(self, paragraph, image_path: str, *, width_emu: int | None = None):
+        return self.emitter.emit_image(paragraph, image_path, width_emu=width_emu)
+
+    def convert_image_run_to_wrap_anchor(
+        self,
+        run,
+        *,
+        place: str | None,
+        pos_y_emu: int = 0,
+    ):
+        return self.emitter.convert_image_run_to_wrap_anchor(
+            run,
+            place=place,
+            pos_y_emu=pos_y_emu,
+        )
+
+    def emit_wrapped_caption_anchor(
+        self,
+        *,
+        source_paragraph,
+        place: str | None,
+        pos_y_emu: int,
+        box_cx_emu: int,
+        box_cy_emu: int,
+    ):
+        return self.emitter.emit_wrapped_caption_anchor(
+            self.doc,
+            source_paragraph=source_paragraph,
+            place=place,
+            pos_y_emu=pos_y_emu,
+            box_cx_emu=box_cx_emu,
+            box_cy_emu=box_cy_emu,
+        )

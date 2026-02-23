@@ -105,6 +105,9 @@ Planned backend API surface:
 - `emit_image(spec)` / `begin_caption(role)` / `end_caption()`
 - `begin_list(kind, level)` / `emit_list_item()` / `end_list()`
 
+Current status:
+- Figure/image insertion and wrapped-caption anchoring are emitted through backend methods; extension handlers orchestrate intent and sizing only.
+
 Caption content model:
 - Captions are structured containers, not plain-text-only fields.
 - Caption rendering must reuse normal inline pipeline so content like math, links, citations, and inline styles is preserved.

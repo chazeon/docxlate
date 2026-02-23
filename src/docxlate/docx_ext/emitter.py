@@ -1,8 +1,13 @@
 from __future__ import annotations
 from contextlib import contextmanager
 
+from docx.oxml.ns import qn
 from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
+from .floating import (
+    convert_inline_drawing_to_wrapped_anchor,
+    insert_wrapped_caption_anchor,
+)
 from .hyperlink import HyperlinkWriter
 from .run_style import apply_text_span_style
 
@@ -70,6 +75,49 @@ class DocxEmitterBackend:
         if spec.number:
             run = paragraph.add_run(f" ({spec.number})")
             apply_theme_font(run, "minor")
+
+    def emit_image(self, paragraph, image_path: str, *, width_emu: int | None = None):
+        run = paragraph.add_run()
+        if width_emu is not None:
+            run.add_picture(str(image_path), width=width_emu)
+        else:
+            run.add_picture(str(image_path))
+        return run
+
+    def convert_image_run_to_wrap_anchor(
+        self,
+        run,
+        *,
+        place: str | None,
+        pos_y_emu: int = 0,
+    ):
+        drawing = run._r.find(qn("w:drawing"))
+        if drawing is None:
+            return None
+        return convert_inline_drawing_to_wrapped_anchor(
+            drawing,
+            place=place,
+            pos_y_emu=pos_y_emu,
+        )
+
+    def emit_wrapped_caption_anchor(
+        self,
+        doc,
+        *,
+        source_paragraph,
+        place: str | None,
+        pos_y_emu: int,
+        box_cx_emu: int,
+        box_cy_emu: int,
+    ):
+        return insert_wrapped_caption_anchor(
+            doc,
+            source_paragraph=source_paragraph,
+            place=place,
+            pos_y_emu=pos_y_emu,
+            box_cx_emu=box_cx_emu,
+            box_cy_emu=box_cy_emu,
+        )
 
     def _emit_plain_span(self, paragraph, span: TextSpan):
         run = paragraph.add_run(span.text)
