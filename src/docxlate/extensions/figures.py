@@ -4,6 +4,7 @@ from pathlib import Path
 
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
+from jinja2 import Environment as JinjaEnvironment
 from plasTeX import Command, Environment
 
 from docxlate.model import RenderContext
@@ -140,6 +141,130 @@ def _estimate_caption_box_height_emu(text: str, box_cx_emu: int) -> int:
     return max(320000, line_count * line_height_emu + padding)
 
 
+def _caption_template_env() -> JinjaEnvironment:
+    return JinjaEnvironment(
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+        variable_start_string="<<",
+        variable_end_string=">>",
+        block_start_string="<%",
+        block_end_string="%>",
+    )
+
+
+def _caption_template_source(template: str) -> str:
+    source = template
+    # Allow simple {{ var }} placeholders as a compatibility shorthand.
+    if "{{" in source and "<<" not in source:
+        source = source.replace("{{", "<<").replace("}}", ">>")
+    return source
+
+
+def _caption_tex_from_node(latex, node) -> str:
+    fragment = getattr(node, "attributes", {}).get("self")
+    source = getattr(fragment, "source", None) if fragment is not None else None
+    if source is not None and str(source).strip():
+        return str(source).strip()
+    return latex.get_arg_text(node, 0, key="self")
+
+
+def _fragment_text(value) -> str | None:
+    if value is None:
+        return None
+    text_content = getattr(value, "textContent", None)
+    if text_content is not None:
+        text = str(text_content).strip()
+        if text:
+            return text
+    source = getattr(value, "source", None)
+    if source is not None:
+        text = str(source).strip()
+        if text:
+            return text
+    text = str(value).strip()
+    if text and "plasTeX.TeXFragment object" not in text:
+        return text
+    return None
+
+
+def _find_figure_label(latex, node) -> str | None:
+    scope = getattr(node, "parentNode", None)
+    while scope is not None:
+        stack = list(getattr(scope, "childNodes", []) or [])
+        while stack:
+            child = stack.pop(0)
+            if getattr(child, "nodeName", None) == "label":
+                label_name = latex.get_arg_text(child, 0, key="label")
+                if label_name:
+                    return label_name
+            stack[0:0] = list(getattr(child, "childNodes", []) or [])
+        node_name = getattr(scope, "nodeName", None)
+        if node_name in {"figure", "wrapfigure"}:
+            break
+        scope = getattr(scope, "parentNode", None)
+    return None
+
+
+def _resolved_label_number(latex, label_name: str | None) -> str:
+    if not label_name:
+        return "?"
+    refs = latex.context.get("refs", {})
+    ref_info = refs.get(label_name, {})
+    ref_text = ref_info.get("ref_num")
+    if ref_text is not None:
+        return str(ref_text)
+    labels = latex.context.get("labels", {})
+    known = labels.get(label_name, {})
+    known_text = known.get("ref_text")
+    if known_text:
+        return str(known_text)
+    return "?"
+
+
+def _figure_name_from_node(node) -> str:
+    name = _fragment_text(getattr(node, "captionName", None))
+    if name and "\\" not in name and "{" not in name and "}" not in name:
+        return name
+    return "Figure"
+
+
+def _figure_number_from_node(node) -> str | None:
+    value = _fragment_text(getattr(node, "ref", None))
+    if not value:
+        return None
+    if "\\" in value or "{" in value or "}" in value:
+        return None
+    return value
+
+
+def _render_caption_with_template(latex, node) -> str | None:
+    template = latex.context.get("figure_caption_template")
+    if not template:
+        return None
+    caption_tex = _caption_tex_from_node(latex, node)
+    label_name = _find_figure_label(latex, node)
+    fig_num = _resolved_label_number(latex, label_name)
+    if fig_num == "?":
+        parsed_ref = _figure_number_from_node(node)
+        if parsed_ref:
+            fig_num = parsed_ref
+    fig_name = _figure_name_from_node(node)
+    env = _caption_template_env()
+    compiled = env.from_string(_caption_template_source(str(template)))
+    return compiled.render(
+        x=fig_num,
+        number=fig_num,
+        fig_num=fig_num,
+        thefigure=fig_num,
+        fig_name=fig_name,
+        figurename=fig_name,
+        caption=caption_tex,
+        caption_tex=caption_tex,
+        label=label_name or "",
+    ).strip()
+
+
 def register(latex):
     for macro_name, macro_class in {
         "includegraphics": includegraphics,
@@ -192,15 +317,19 @@ def register(latex):
     @latex.command("caption", inline=True)
     def handle_caption(node):
         stack = latex.context.get("figure_stack", [])
-        self_fragment = getattr(node, "attributes", {}).get("self")
         caption_ctx = RenderContext().with_para_role("caption")
         p = latex.add_paragraph_for_role("caption")
-        with latex.render_frame(paragraph=p, style=caption_ctx):
-            if self_fragment is not None and getattr(self_fragment, "childNodes", None):
-                latex.render_nodes(self_fragment.childNodes)
-            else:
-                text = latex.get_arg_text(node, 0, key="self")
-                latex.append_inline(text)
+        templated = _render_caption_with_template(latex, node)
+        if templated is not None:
+            latex.render_latex_fragment(templated, paragraph=p, style=caption_ctx)
+        else:
+            self_fragment = getattr(node, "attributes", {}).get("self")
+            with latex.render_frame(paragraph=p, style=caption_ctx):
+                if self_fragment is not None and getattr(self_fragment, "childNodes", None):
+                    latex.render_nodes(self_fragment.childNodes)
+                else:
+                    text = latex.get_arg_text(node, 0, key="self")
+                    latex.append_inline(text)
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))

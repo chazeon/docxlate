@@ -10,6 +10,7 @@ parse_skip_packages:
 parse_skip_usepackage_paths:
   - styles/proposal-compact
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
+figure_caption_template: \textbf{<< fig_name >>. << fig_num >>} << caption >>
 bibliography_template: |
   <% if authors %>
   <% if authors|length > et_al_limit %>

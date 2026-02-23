@@ -170,3 +170,34 @@ Body after.
     if body_idx >= 2:
         between = latex.doc.paragraphs[body_idx - 2 : body_idx]
         assert not any((not p.text.strip()) and "<wp:anchor" not in p._element.xml for p in between)
+
+
+def test_caption_template_renders_number_and_caption_text():
+    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["refs"] = {"fig:demo": {"ref_num": "12"}}
+    latex.run(r"\begin{figure}\caption{Cap \textit{alpha}}\label{fig:demo}\end{figure}")
+
+    para = next((p for p in latex.doc.paragraphs if "Figure. 12" in p.text), None)
+    assert para is not None
+    assert "Cap alpha" in para.text
+    assert any(run.bold for run in para.runs if run.text and "Figure. 12" in run.text)
+    assert any(run.italic for run in para.runs if run.text and "alpha" in run.text)
+
+
+def test_caption_template_accepts_double_curly_placeholders():
+    latex.context["figure_caption_template"] = r"\textbf{Figure. {{x}}} {{caption}}"
+    latex.context["refs"] = {"fig:demo": {"ref_num": "7"}}
+    latex.run(r"\begin{figure}\caption{Gamma}\label{fig:demo}\end{figure}")
+
+    para = next((p for p in latex.doc.paragraphs if "Figure. 7" in p.text), None)
+    assert para is not None
+    assert "Gamma" in para.text
+
+
+def test_caption_template_uses_unknown_number_when_unresolved():
+    latex.context["figure_caption_template"] = r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"
+    latex.run(r"\begin{figure}\caption{Delta}\label{fig:demo}\end{figure}")
+
+    para = next((p for p in latex.doc.paragraphs if "Figure. ?" in p.text), None)
+    assert para is not None
+    assert "Delta" in para.text

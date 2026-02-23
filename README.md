@@ -78,6 +78,7 @@ latex.save("output.docx")
 Validated with Pydantic (`extra=forbid`). Current keys:
 
 - `bibliography_template`
+- `figure_caption_template`
 - `bibliography_numbering`: `bracket` | `none`
 - `bibliography_indent_in`: float (`> 0`)
 - `bibliography_et_al_limit`: int (`> 0`)
@@ -98,6 +99,7 @@ parse_skip_packages:
   - fontspec
   - expl3
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
+figure_caption_template: "\\textbf{<< fig_name >>. << fig_num >>} << caption >>"
 ```
 
 ## Math Conversion

@@ -9,6 +9,7 @@ class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     bibliography_template: str | None = None
+    figure_caption_template: str | None = None
     bibliography_numbering: Literal["bracket", "none"] | None = None
     bibliography_indent_in: float | None = Field(default=None, gt=0)
     bibliography_et_al_limit: int | None = Field(default=None, gt=0)
