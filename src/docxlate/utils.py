@@ -105,10 +105,26 @@ def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
     """
     root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
     for m_run in root.xpath(".//m:r", namespaces=_OMML_NS):
-        w_rpr = m_run.find(_wtag("rPr"))
-        if w_rpr is None:
-            w_rpr = etree.Element(qn("w:rPr"))
-            m_run.insert(0, w_rpr)
+        m_rpr = m_run.find(f"{{{OMML_NAMESPACE}}}rPr")
+        if m_rpr is not None:
+            # Avoid invalid duplicate run-property branches: if math run already
+            # has m:rPr, place Word run properties under m:ctrlPr.
+            if not color:
+                continue
+            ctrl_pr = m_rpr.find(f"{{{OMML_NAMESPACE}}}ctrlPr")
+            if ctrl_pr is None:
+                ctrl_pr = etree.Element(f"{{{OMML_NAMESPACE}}}ctrlPr")
+                m_rpr.append(ctrl_pr)
+            w_rpr = ctrl_pr.find(_wtag("rPr"))
+            if w_rpr is None:
+                w_rpr = etree.Element(qn("w:rPr"))
+                ctrl_pr.append(w_rpr)
+        else:
+            w_rpr = m_run.find(_wtag("rPr"))
+            if w_rpr is None:
+                w_rpr = etree.Element(qn("w:rPr"))
+                m_run.insert(0, w_rpr)
+
         r_fonts = w_rpr.find(_wtag("rFonts"))
         if r_fonts is None:
             r_fonts = etree.Element(qn("w:rFonts"))
@@ -117,6 +133,7 @@ def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
             r_fonts.set(qn("w:ascii"), "Cambria Math")
         if r_fonts.get(qn("w:hAnsi")) is None:
             r_fonts.set(qn("w:hAnsi"), "Cambria Math")
+
         if not color:
             continue
         w_color = w_rpr.find(_wtag("color"))
