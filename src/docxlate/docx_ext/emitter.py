@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
 from .hyperlink import _emit_linked_span
+from .run_style import apply_text_span_style
 
 
 class DocxEmitterBackend:
@@ -63,17 +64,6 @@ class DocxEmitterBackend:
             run = paragraph.add_run(f" ({spec.number})")
             apply_theme_font(run, "minor")
 
-    def _apply_run_style(self, run, span: TextSpan):
-        apply_theme_font(run, span.style.theme or "minor")
-        if span.style.monospace:
-            run.font.name = "Courier New"
-        if span.style.bold:
-            run.bold = True
-        if span.style.italic:
-            run.italic = True
-        if span.style.small_caps:
-            run.font.small_caps = True
-
     def _emit_plain_span(self, paragraph, span: TextSpan):
         run = paragraph.add_run(span.text)
         if span.char_role:
@@ -81,7 +71,7 @@ class DocxEmitterBackend:
                 run.style = span.char_role
             except Exception:
                 pass
-        self._apply_run_style(run, span)
+        apply_text_span_style(run, span)
 
     def _emit_linked_span(self, paragraph, span: TextSpan, link: LinkTarget):
         if not _emit_linked_span(paragraph, span, link):

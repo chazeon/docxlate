@@ -5,6 +5,7 @@ from docx.oxml.ns import qn
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 from docxlate.model import LinkTarget, TextSpan
+from .run_style import new_run_properties_for_span
 
 
 def _emit_linked_span(paragraph, span: TextSpan, link: LinkTarget):
@@ -33,36 +34,8 @@ def _new_hyperlink_element(paragraph, link: LinkTarget):
 
 def _new_hyperlink_run_element(span: TextSpan):
     run = OxmlElement("w:r")
-    run.append(_new_run_properties_element(span))
+    run.append(new_run_properties_for_span(span, default_char_role="Hyperlink"))
     text_node = OxmlElement("w:t")
     text_node.text = span.text
     run.append(text_node)
     return run
-
-
-def _new_run_properties_element(span: TextSpan):
-    r_pr = OxmlElement("w:rPr")
-    r_style = OxmlElement("w:rStyle")
-    r_style.set(qn("w:val"), span.char_role or "Hyperlink")
-    r_pr.append(r_style)
-    if span.style.bold:
-        r_pr.append(OxmlElement("w:b"))
-    if span.style.italic:
-        r_pr.append(OxmlElement("w:i"))
-    if span.style.small_caps:
-        r_pr.append(OxmlElement("w:smallCaps"))
-    r_pr.append(_new_fonts_element(span))
-    return r_pr
-
-
-def _new_fonts_element(span: TextSpan):
-    r_fonts = OxmlElement("w:rFonts")
-    if span.style.monospace:
-        r_fonts.set(qn("w:ascii"), "Courier New")
-        r_fonts.set(qn("w:hAnsi"), "Courier New")
-        r_fonts.set(qn("w:cs"), "Courier New")
-        return r_fonts
-    val = "major" if span.style.theme == "major" else "minor"
-    r_fonts.set(qn("w:asciiTheme"), f"{val}Ascii")
-    r_fonts.set(qn("w:hAnsiTheme"), f"{val}HAnsi")
-    return r_fonts
