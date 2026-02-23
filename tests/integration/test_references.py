@@ -102,3 +102,16 @@ def test_href_bold_equivalent_for_both_nesting_orders():
 def test_nested_hyperlinks_raise_error():
     with pytest.raises(RuntimeError, match="Nested hyperlinks are not supported"):
         latex.run(r"\href{https://a.example}{Outer \href{https://b.example}{Inner}}")
+
+
+def test_invalid_href_target_is_rendered_as_plain_text_without_relationship():
+    latex.run(r"\href{<plasTeX.TeXFragment object at 0x1>}{Bad Link}")
+
+    para = latex.doc.paragraphs[0]
+    assert "Bad Link" in para.text
+    xml = para._element.xml
+    assert "w:hyperlink" not in xml
+    rels = latex.doc.part.rels
+    assert not any("plasTeX.TeXFragment" in getattr(rel, "target_ref", "") for rel in rels.values())
+    warnings = latex.context.get("warnings", [])
+    assert any("Skipped invalid hyperlink target" in w for w in warnings)
