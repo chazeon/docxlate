@@ -344,7 +344,11 @@ class LatexBridge:
                 self._flush_paragraph()
                 with self.render_frame(style=active_ctx):
                     env_handler(node)
-                self._flush_paragraph()
+                preserve_after = bool(
+                    self.context.pop("_preserve_paragraph_after_env_once", False)
+                )
+                if not preserve_after:
+                    self._flush_paragraph()
                 continue
 
             self._walk(children, active_ctx)

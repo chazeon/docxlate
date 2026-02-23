@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx.oxml.ns import qn
-from docx.shared import Inches
+from docx.shared import Inches, Pt
 from plasTeX import Command, Environment
 
 from docxlate.model import RenderContext
@@ -222,11 +222,16 @@ def register(latex):
         place = latex.get_arg_text(node, 0, key="place")
         width = latex.get_arg_text(node, 1, key="width")
         p = latex.add_paragraph_for_role("body")
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
         stack = latex.context.setdefault("figure_stack", [])
         stack.append({"kind": "wrapfigure", "place": place, "width": width, "lines": lines})
         try:
             with latex.render_frame(paragraph=p):
                 latex.render_nodes(node.childNodes)
+            # Keep this anchor paragraph available so following body text can
+            # share it instead of creating an empty line before content.
+            latex.context["_preserve_paragraph_after_env_once"] = True
         finally:
             stack.pop()
 

@@ -131,3 +131,34 @@ def test_wrapfigure_width_tracks_textwidth_fraction(tmp_path):
     expected = int(0.4 * textwidth)
     # Allow ~5% tolerance for rounding/dpi interactions.
     assert abs(cx - expected) <= int(0.05 * textwidth)
+
+
+def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Wrapped Figure Caption}}
+\end{{wrapfigure}}
+Body after.
+"""
+    latex.run(tex)
+
+    body_idx = next(
+        (idx for idx, p in enumerate(latex.doc.paragraphs) if "Body after." in p.text),
+        None,
+    )
+    assert body_idx is not None
+    assert body_idx >= 1
+    anchor_para = latex.doc.paragraphs[body_idx - 1]
+    assert "<wp:anchor" in anchor_para._element.xml
+    # No additional plain empty paragraph should be inserted between wrap anchor and body.
+    if body_idx >= 2:
+        between = latex.doc.paragraphs[body_idx - 2 : body_idx]
+        assert not any((not p.text.strip()) and "<wp:anchor" not in p._element.xml for p in between)
