@@ -201,3 +201,16 @@ def test_caption_template_uses_unknown_number_when_unresolved():
     para = next((p for p in latex.doc.paragraphs if "Figure. ?" in p.text), None)
     assert para is not None
     assert "Delta" in para.text
+
+
+def test_caption_template_keeps_caption_spacing_and_inline_formatting():
+    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["refs"] = {"fig:demo": {"ref_num": "3"}}
+    latex.run(
+        r"\begin{figure}\caption{Alpha beta \textit{gamma} delta}\label{fig:demo}\end{figure}"
+    )
+
+    para = next((p for p in latex.doc.paragraphs if "Figure. 3" in p.text), None)
+    assert para is not None
+    assert "Alpha beta gamma delta" in para.text
+    assert any(run.italic for run in para.runs if "gamma" in (run.text or ""))

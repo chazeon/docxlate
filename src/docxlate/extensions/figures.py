@@ -242,7 +242,7 @@ def _render_caption_with_template(latex, node) -> str | None:
     template = latex.context.get("figure_caption_template")
     if not template:
         return None
-    caption_tex = _caption_tex_from_node(latex, node)
+    slot = "__DOCXLATE_CAPTION_SLOT__"
     label_name = _find_figure_label(latex, node)
     fig_num = _resolved_label_number(latex, label_name)
     if fig_num == "?":
@@ -259,8 +259,8 @@ def _render_caption_with_template(latex, node) -> str | None:
         thefigure=fig_num,
         fig_name=fig_name,
         figurename=fig_name,
-        caption=caption_tex,
-        caption_tex=caption_tex,
+        caption=slot,
+        caption_tex=slot,
         label=label_name or "",
     ).strip()
 
@@ -321,7 +321,19 @@ def register(latex):
         p = latex.add_paragraph_for_role("caption")
         templated = _render_caption_with_template(latex, node)
         if templated is not None:
-            latex.render_latex_fragment(templated, paragraph=p, style=caption_ctx)
+            slot = "__DOCXLATE_CAPTION_SLOT__"
+            self_fragment = getattr(node, "attributes", {}).get("self")
+            prefix, sep, suffix = templated.partition(slot)
+            if prefix:
+                latex.render_latex_fragment(prefix, paragraph=p, style=caption_ctx)
+            with latex.render_frame(paragraph=p, style=caption_ctx):
+                if self_fragment is not None and getattr(self_fragment, "childNodes", None):
+                    latex.render_nodes(self_fragment.childNodes)
+                else:
+                    text = latex.get_arg_text(node, 0, key="self")
+                    latex.append_inline(text)
+            if sep and suffix:
+                latex.render_latex_fragment(suffix, paragraph=p, style=caption_ctx)
         else:
             self_fragment = getattr(node, "attributes", {}).get("self")
             with latex.render_frame(paragraph=p, style=caption_ctx):
