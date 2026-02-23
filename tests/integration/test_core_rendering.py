@@ -235,6 +235,21 @@ def test_paragraph_heading_does_not_force_trailing_dot():
     assert "Overview. Body." not in para.text
 
 
+def test_noindent_sets_first_line_indent_on_current_paragraph():
+    latex.run(r"\noindent First line.")
+    para = next((p for p in latex.doc.paragraphs if "First line." in p.text), None)
+    assert para is not None
+    assert 'w:firstLine="0"' in para._element.xml
+
+
+def test_noindent_applies_once_then_resets():
+    latex.run(r"\noindent First.\par Second.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    assert len(nonempty) >= 2
+    assert 'w:firstLine="0"' in nonempty[0]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[1]._element.xml
+
+
 @pytest.mark.parametrize(
     "policy,metadata_in_body,has_maketitle,expect_title",
     [

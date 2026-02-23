@@ -339,6 +339,11 @@ def handle_maketitle(_node):
     _emit_front_matter(prepend=False)
 
 
+@latex.command("noindent", inline=True)
+def handle_noindent(_node):
+    latex.request_noindent()
+
+
 @latex.command("paragraph", inline=True)
 def handle_paragraph(node):
     """Render LaTeX \\paragraph as a run-in heading."""

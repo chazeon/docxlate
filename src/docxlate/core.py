@@ -6,6 +6,7 @@ import re
 from typing import Mapping
 
 from docx import Document
+from docx.shared import Pt
 from plasTeX import Command, Environment
 from plasTeX.DOM import Text
 
@@ -545,8 +546,22 @@ class LatexBridge:
                 role=role,
                 style_table=self.style_table,
             )
+            self._consume_noindent_once(self._current_paragraph)
             if self._active_render_context().para_role is None:
                 self._next_body_role = "body"
+
+    def request_noindent(self):
+        paragraph = self._active_paragraph()
+        if paragraph is not None and not any(run.text.strip() for run in paragraph.runs):
+            self._consume_noindent_once(paragraph)
+            return
+        self.context["_noindent_once"] = True
+
+    def _consume_noindent_once(self, paragraph):
+        if not self.context.get("_noindent_once"):
+            return
+        paragraph.paragraph_format.first_line_indent = Pt(0)
+        self.context["_noindent_once"] = False
 
     def mark_next_body_paragraph_first(self):
         self._next_body_role = "first_body"
