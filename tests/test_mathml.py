@@ -10,7 +10,7 @@ def test_inject_omml_generates_omml_element():
     if xsl:
         xsl_path = Path(xsl).expanduser()
     else:
-        xsl_path = Path("/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL")
+        xsl_path = Path("/Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl")
     if not xsl_path.exists():
         pytest.skip("No OMML XSL configured; set DOCXLATE_MML2OMML_XSL to run this test")
 

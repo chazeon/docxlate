@@ -4,6 +4,7 @@ from pathlib import Path
 from docxlate.handlers import latex
 
 OFFICE_XSL_CANDIDATES = [
+    Path("/Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl"),
     Path("/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"),
 ]
 

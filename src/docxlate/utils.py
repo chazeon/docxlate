@@ -36,15 +36,24 @@ def inject_omml(paragraph, latex_str, *, xsl_path: str | Path | None = None):
         mathml = latex2mathml.converter.convert(latex_str)
         mathml_element = etree.fromstring(mathml.encode("utf-8"))
         if not xsl_path:
-            raise RuntimeError("OMML stylesheet path is not configured")
+            paragraph.add_run(mathml)
+            return False
         transform = _get_mathml_to_omml_transform(xsl_path)
         omml_result = transform(mathml_element)
-        _normalize_omml_script_bases(omml_result)
+        # Never let post-processing break core math rendering.
+        try:
+            _normalize_omml_script_bases(omml_result)
+        except Exception:
+            pass
         omml_xml = etree.tostring(omml_result, encoding="utf-8")
         paragraph._element.append(parse_xml(omml_xml))
         return True
     except Exception:
-        paragraph.add_run(f"[Math Error: {latex_str}]")
+        # Fallback to MathML text for inspection instead of opaque error tags.
+        try:
+            paragraph.add_run(latex2mathml.converter.convert(latex_str))
+        except Exception:
+            paragraph.add_run(latex_str)
         return False
 
 
@@ -53,7 +62,8 @@ def _normalize_omml_script_bases(omml_root) -> None:
     Word can render empty script bases (<m:t/>) with visible spacing holes.
     Normalize them to a zero-width placeholder to match stable producer output.
     """
-    for text_node in omml_root.xpath(
+    root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
+    for text_node in root.xpath(
         ".//m:sSub/m:e//m:t | .//m:sSup/m:e//m:t | .//m:sSubSup/m:e//m:t",
         namespaces=_OMML_NS,
     ):

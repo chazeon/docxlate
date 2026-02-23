@@ -43,7 +43,7 @@ def test_equation_block_math_injected_or_fallback():
     latex.run(r"\begin{equation}E=mc^2\end{equation}")
 
     para_xml = latex.doc.paragraphs[0]._element.xml
-    assert "<m:oMath" in para_xml or "[Math Error:" in latex.doc.paragraphs[0].text
+    assert "<m:oMath" in para_xml or "<math" in latex.doc.paragraphs[0].text
 
 
 def test_section_body_text_is_rendered_with_plastex():
@@ -159,7 +159,7 @@ def test_section_heading_with_inline_math_renders_text_and_math():
     assert nonempty
     heading = nonempty[0]
     assert "Energy" in heading.text
-    assert "<m:oMath" in heading._element.xml or "[Math Error:" in heading.text
+    assert "<m:oMath" in heading._element.xml or "<math" in heading.text
 
 
 def test_paragraph_heading_with_inline_math_renders_math():
@@ -173,7 +173,7 @@ def test_paragraph_heading_with_inline_math_renders_math():
     assert "Body text." in heading_para.text
     assert (
         heading_para._element.xml.count("<m:oMath") >= 2
-        or heading_para.text.count("[Math Error:") >= 2
+        or heading_para.text.count("<math") >= 2
     )
     assert 'w:firstLine="0"' in heading_para._element.xml
     assert 'w:left="0"' in heading_para._element.xml
