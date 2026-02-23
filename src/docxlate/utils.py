@@ -54,6 +54,7 @@ def inject_omml(
         try:
             _normalize_omml_script_bases(omml_result)
             _apply_native_math_run_properties(omml_result, color=color)
+            _apply_native_nary_control_properties(omml_result, color=color)
         except Exception:
             pass
         omml_node = _coerce_omml_node(omml_result)
@@ -108,6 +109,38 @@ def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
         if w_rpr is None:
             w_rpr = etree.Element(qn("w:rPr"))
             m_run.insert(0, w_rpr)
+        r_fonts = w_rpr.find(_wtag("rFonts"))
+        if r_fonts is None:
+            r_fonts = etree.Element(qn("w:rFonts"))
+            w_rpr.append(r_fonts)
+        if r_fonts.get(qn("w:ascii")) is None:
+            r_fonts.set(qn("w:ascii"), "Cambria Math")
+        if r_fonts.get(qn("w:hAnsi")) is None:
+            r_fonts.set(qn("w:hAnsi"), "Cambria Math")
+        if not color:
+            continue
+        w_color = w_rpr.find(_wtag("color"))
+        if w_color is None:
+            w_color = etree.Element(qn("w:color"))
+            w_rpr.append(w_color)
+        w_color.set(qn("w:val"), color)
+
+
+def _apply_native_nary_control_properties(omml_root, *, color: str | None) -> None:
+    """
+    Integral/summation glyphs are controlled by m:naryPr/m:ctrlPr.
+    Add Word-native ctrlPr so operator color follows scoped math color.
+    """
+    root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
+    for nary_pr in root.xpath(".//m:naryPr", namespaces=_OMML_NS):
+        ctrl_pr = nary_pr.find(f"{{{OMML_NAMESPACE}}}ctrlPr")
+        if ctrl_pr is None:
+            ctrl_pr = etree.Element(f"{{{OMML_NAMESPACE}}}ctrlPr")
+            nary_pr.append(ctrl_pr)
+        w_rpr = ctrl_pr.find(_wtag("rPr"))
+        if w_rpr is None:
+            w_rpr = etree.Element(qn("w:rPr"))
+            ctrl_pr.append(w_rpr)
         r_fonts = w_rpr.find(_wtag("rFonts"))
         if r_fonts is None:
             r_fonts = etree.Element(qn("w:rFonts"))

@@ -101,6 +101,16 @@ def test_equation_in_color_scope_keeps_equation_rendered():
     assert "<m:oMath" in para._element.xml or "<math" in para.text
 
 
+def test_equation_nary_operator_receives_scoped_color():
+    latex.run(r"{\color{red}\begin{equation}\int_0^1 f(x)\,dx = 1\end{equation}}")
+    para_xml = latex.doc.paragraphs[0]._element.xml
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    assert "<m:naryPr>" in para_xml
+    assert "<m:ctrlPr>" in para_xml
+    assert 'w:color w:val="FF0000"' in para_xml
+
+
 def test_section_body_text_is_rendered_with_plastex():
     latex.run(r"\section{Introduction} Hello world.")
 
