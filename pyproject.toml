@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-docxlate = "docxlate.cli:main"
+docxlate = "docxlate.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
