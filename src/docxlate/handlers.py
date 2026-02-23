@@ -30,8 +30,14 @@ class Color(Command):
     args = "color:str"
 
 
+class Needspace(Command):
+    macroName = "Needspace"
+    args = "len:str"
+
+
 latex.macro("and", And)
 latex.macro("color", Color)
+latex.macro("Needspace", Needspace)
 
 
 def _bibliography_layout_settings() -> dict:
@@ -353,6 +359,12 @@ def handle_noindent(_node):
 @latex.command("indent", inline=True)
 def handle_indent(_node):
     latex.request_indent()
+
+
+@latex.command("Needspace", inline=True)
+def handle_needspace(_node):
+    # Layout hint for TeX pagination; no-op for DOCX output.
+    return
 
 
 @latex.command("paragraph", inline=True)

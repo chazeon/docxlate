@@ -97,11 +97,11 @@ def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
         and "<wp:anchor" in pxml
         for pxml in xml_paragraphs
     )
-    # Caption textbox should not swallow the wrapped image drawing.
+    # Caption textbox can share the same anchor paragraph as the wrapped image.
     assert any(
         ("http://schemas.microsoft.com/office/word/2010/wordprocessingShape" in pxml)
         and ("Wrapped Figure Caption" in pxml)
-        and ("<pic:pic" not in pxml and "<a:blip" not in pxml)
+        and ("<pic:pic" in pxml or "<a:blip" in pxml)
         for pxml in xml_paragraphs
     )
 
@@ -165,6 +165,7 @@ Body after.
     assert body_idx >= 1
     anchor_para = latex.doc.paragraphs[body_idx - 1]
     assert "<wp:anchor" in anchor_para._element.xml
+    assert anchor_para.text.strip() == ""
     # No additional plain empty paragraph should be inserted between wrap anchor and body.
     if body_idx >= 2:
         between = latex.doc.paragraphs[body_idx - 2 : body_idx]

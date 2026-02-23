@@ -208,6 +208,7 @@ def register(latex):
             caption_cy = _estimate_caption_box_height_emu(p.text, box_cx)
             latex.emit_wrapped_caption_anchor(
                 source_paragraph=p,
+                anchor_paragraph=stack[-1].get("anchor_paragraph"),
                 place=stack[-1].get("place"),
                 pos_y_emu=image_cy + 114300,
                 box_cx_emu=max(1200000, box_cx),
@@ -223,10 +224,23 @@ def register(latex):
         p.paragraph_format.space_before = Pt(0)
         p.paragraph_format.space_after = Pt(0)
         stack = latex.context.setdefault("figure_stack", [])
-        stack.append({"kind": "wrapfigure", "place": place, "width": width, "lines": lines})
+        stack.append(
+            {
+                "kind": "wrapfigure",
+                "place": place,
+                "width": width,
+                "lines": lines,
+                "anchor_paragraph": p,
+            }
+        )
         try:
-            with latex.render_frame(paragraph=p):
-                latex.render_nodes(node.childNodes)
+            previous_suppress = bool(latex.context.get("_suppress_whitespace_text", False))
+            latex.context["_suppress_whitespace_text"] = True
+            try:
+                with latex.render_frame(paragraph=p):
+                    latex.render_nodes(node.childNodes)
+            finally:
+                latex.context["_suppress_whitespace_text"] = previous_suppress
             # Keep this anchor paragraph available so following body text can
             # share it instead of creating an empty line before content.
             latex.context["_preserve_paragraph_after_env_once"] = True

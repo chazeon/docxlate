@@ -105,6 +105,7 @@ class DocxEmitterBackend:
         doc,
         *,
         source_paragraph,
+        anchor_paragraph=None,
         place: str | None,
         pos_y_emu: int,
         box_cx_emu: int,
@@ -113,6 +114,7 @@ class DocxEmitterBackend:
         return insert_wrapped_caption_anchor(
             doc,
             source_paragraph=source_paragraph,
+            anchor_paragraph=anchor_paragraph,
             place=place,
             pos_y_emu=pos_y_emu,
             box_cx_emu=box_cx_emu,

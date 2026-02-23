@@ -544,6 +544,8 @@ class LatexBridge:
             self.context["_trim_next_leading_space_once"] = False
         if text == "":
             return
+        if self.context.get("_suppress_whitespace_text") and text.isspace():
+            return
         paragraph = self._active_paragraph()
         if text.isspace():
             if paragraph is None:
@@ -699,6 +701,7 @@ class LatexBridge:
         self,
         *,
         source_paragraph,
+        anchor_paragraph=None,
         place: str | None,
         pos_y_emu: int,
         box_cx_emu: int,
@@ -707,6 +710,7 @@ class LatexBridge:
         return self.emitter.emit_wrapped_caption_anchor(
             self.doc,
             source_paragraph=source_paragraph,
+            anchor_paragraph=anchor_paragraph,
             place=place,
             pos_y_emu=pos_y_emu,
             box_cx_emu=box_cx_emu,

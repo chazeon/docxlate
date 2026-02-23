@@ -297,6 +297,16 @@ def test_indent_applies_to_next_paragraph_only():
     assert 'w:firstLine="0"' not in nonempty[2]._element.xml
 
 
+def test_needspace_command_does_not_emit_numeric_artifacts():
+    latex.run(r"Alpha.\par \Needspace{16\baselineskip}Beta.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    text = "\n".join(p.text.strip() for p in nonempty)
+    assert "Alpha." in text
+    assert "Beta." in text
+    assert "\n16\n" not in f"\n{text}\n"
+    assert not any(p.text.strip() == "16" for p in nonempty)
+
+
 @pytest.mark.parametrize(
     "policy,metadata_in_body,has_maketitle,expect_title",
     [
