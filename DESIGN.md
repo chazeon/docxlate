@@ -130,6 +130,7 @@ Color handling policy:
 - Track color as part of inline `StyleState` and resolve it during walk-time scope composition.
 - Apply resolved color directly to text runs (`w:rPr/w:color`) in backend emission.
 - For math, color must be propagated through math emission (OMML math run properties), not only text run properties.
+- Compatibility guard: avoid direct OMML run-property rewrites that trigger Word document recovery; keep math-color as a deferred compatibility task until validated with Word.
 
 ### 7. Figure and Float Handling
 - Parse `figure` and `wrapfigure` environments as first-class content blocks.

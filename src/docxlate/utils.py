@@ -7,7 +7,6 @@ from pathlib import Path
 
 MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
 OMML_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/math"
-WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 _XSLT_CACHE: dict[str, etree.XSLT] = {}
 _OMML_NS = {"m": OMML_NAMESPACE}
@@ -52,7 +51,6 @@ def inject_omml(
         # Never let post-processing break core math rendering.
         try:
             _normalize_omml_script_bases(omml_result)
-            _apply_omml_math_color(omml_result, color)
         except Exception:
             pass
         omml_xml = etree.tostring(omml_result, encoding="utf-8")
@@ -90,28 +88,3 @@ def _apply_text_run_color(run, color: str | None) -> None:
         run.font.color.rgb = RGBColor.from_string(color)
     except Exception:
         return
-
-
-def _apply_omml_math_color(omml_root, color: str | None) -> None:
-    if not color:
-        return
-    root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
-    runs = root.xpath(".//m:r", namespaces=_OMML_NS)
-    for run in runs:
-        r_pr = run.find(f"{{{OMML_NAMESPACE}}}rPr")
-        if r_pr is None:
-            r_pr = etree.Element(f"{{{OMML_NAMESPACE}}}rPr")
-            run.insert(0, r_pr)
-        ctrl_pr = r_pr.find(f"{{{OMML_NAMESPACE}}}ctrlPr")
-        if ctrl_pr is None:
-            ctrl_pr = etree.Element(f"{{{OMML_NAMESPACE}}}ctrlPr")
-            r_pr.append(ctrl_pr)
-        w_rpr = ctrl_pr.find(f"{{{WORD_NAMESPACE}}}rPr")
-        if w_rpr is None:
-            w_rpr = etree.Element(f"{{{WORD_NAMESPACE}}}rPr")
-            ctrl_pr.append(w_rpr)
-        w_color = w_rpr.find(f"{{{WORD_NAMESPACE}}}color")
-        if w_color is None:
-            w_color = etree.Element(f"{{{WORD_NAMESPACE}}}color")
-            w_rpr.append(w_color)
-        w_color.set(qn("w:val"), color)
