@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# OS/editor
+.DS_Store
+
+# Generated docs/output
+*.docx
+~$*.docx
+
+# Local LaTeX build artifacts / scratch inputs
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.log
+*.out
+main.tex
+test.tex
+figures/
+latex/
+styles/

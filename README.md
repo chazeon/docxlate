@@ -1,0 +1,117 @@
+# docxlate
+
+LaTeX to Word (`.docx`) converter built on:
+- `plasTeX` for parsing/macro expansion
+- `python-docx` for document generation
+
+## Status
+
+This project is pragmatic and evolving. It supports many common structures (sections, inline styles, math, citations, references, lists, figures/wrapfigure, links), but is not a full TeX engine.
+
+See `DESIGN.md` for architecture and roadmap.
+
+## Installation
+
+```bash
+pip install .
+```
+
+or with `uv`:
+
+```bash
+uv sync
+```
+
+## CLI
+
+Basic:
+
+```bash
+docxlate input.tex -o output.docx
+```
+
+Use an existing DOCX template:
+
+```bash
+docxlate input.tex -o output.docx --template template.docx
+```
+
+Load runtime config from YAML:
+
+```bash
+docxlate input.tex -o output.docx --config config.yaml
+```
+
+If `--config` is omitted, `docxlate.yaml` in the current directory is auto-loaded when present.
+
+Legacy CLI alias `docxlate` is still available for compatibility.
+
+## Library Usage
+
+```python
+from docxlate import latex
+
+tex = r"""
+\section{Intro}
+Hello world.
+"""
+
+latex.reset_document()  # optional
+latex.context["tex_path"] = "input.tex"  # enables .aux/.bbl lookup conventions
+latex.run(tex)
+latex.save("output.docx")
+```
+
+## Runtime Config (YAML)
+
+Validated with Pydantic (`extra=forbid`). Current keys:
+
+- `bibliography_template`
+- `bibliography_numbering`: `bracket` | `none`
+- `bibliography_indent_in`: float (`> 0`)
+- `bibliography_et_al_limit`: int (`> 0`)
+- `citation_compress_ranges`: bool
+- `citation_range_min_run`: int (`> 1`)
+- `title_render_policy`: `explicit` | `auto` | `always`
+- `parse_skip_packages`: list of package names to skip in parser input
+- `parse_skip_usepackage_paths`: list of `\usepackage{...}` path entries to skip in parser input
+- `mathml2omml_xsl_path`: path to MathML->OMML XSL
+
+Example:
+
+```yaml
+citation_compress_ranges: true
+citation_range_min_run: 2
+title_render_policy: explicit
+parse_skip_packages:
+  - fontspec
+  - expl3
+mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL
+```
+
+## Math Conversion
+
+Math uses `latex2mathml` + XSL transform to OMML.
+
+You must provide `mathml2omml_xsl_path` via config/context. If missing, math falls back to text marker and warning.
+
+Note: `MML2OMML.XSL` is commonly available from local Microsoft Office installations; it is not bundled by this project. On macOS, a common path is:
+
+```text
+/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL
+```
+
+## Notes on Parsing
+
+- `plasTeX` is not a full TeX layout engine.
+- Complex preambles may fail full parse.
+- The converter includes body-only fallback and preamble metadata recovery (`\title`, `\author`, `\date`).
+- Parser skip lists (`parse_skip_packages`, `parse_skip_usepackage_paths`) help avoid known package failures.
+
+## Testing
+
+```bash
+uv run pytest -q
+```
+
+(or `pytest tests/`)

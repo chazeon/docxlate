@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docxlate"
+version = "0.1.0"
+description = "Modern, pragmatic LaTeX to Word (.docx) translation. High-fidelity conversion of math, citations, and figures with a modular, developer-friendly bridge."
+readme = "README.md"
+authors = [{ name = "Chenxing Luo", email = "chenxing.luo@gmail.com" }]
+license = { text = "GNU General Public License v3.0 or later (GPL-3.0-or-later)" }
+requires-python = ">=3.8.1"
+dependencies = [
+    "plasTeX>=3.1",
+    "python-docx>=1.1.0",
+    "latex2mathml>=3.77.0",
+    "lxml>=5.1.0",
+    "click>=8.0.0",
+    "Jinja2>=3.1.0",
+    "PyYAML>=6.0.0",
+    "pydantic>=2.7.0"
+]
+
+[project.scripts]
+docxlate = "docxlate.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.2"]
