@@ -262,3 +262,5 @@ Figure numbering policy:
 - REVTeX note-like `\bibitem` entries that are cited numerically need dedicated classification:
   - Separate "reference entry" vs "note-like citation entry" behavior.
   - Prevent numeric range folding across mixed reference and note-like keys.
+- `wrapfigure` placement currently supports basic left/right alignment only.
+  - Add `i`/`o` (inside/outside) anchoring policy for mirrored page layouts/templates.

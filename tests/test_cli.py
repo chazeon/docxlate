@@ -1,6 +1,8 @@
 from pathlib import Path
 from docx import Document
 from click.testing import CliRunner
+from zipfile import ZipFile
+from lxml import etree
 
 from docxlate.cli import main
 from docxlate.handlers import latex
@@ -92,3 +94,100 @@ def test_cli_rejects_invalid_yaml_config(tmp_path):
 
     assert result.exit_code != 0
     assert "Invalid config" in result.output
+
+
+def _extract_styles_xml(docx_path: Path, out_path: Path):
+    with ZipFile(docx_path, "r") as zf:
+        out_path.write_bytes(zf.read("word/styles.xml"))
+
+
+def _style_based_on(styles_xml_path: Path, style_id: str) -> str | None:
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    root = etree.fromstring(styles_xml_path.read_bytes())
+    nodes = root.xpath(f"//w:style[@w:styleId='{style_id}']", namespaces=ns)
+    if not nodes:
+        return None
+    value = nodes[0].xpath("string(w:basedOn/@w:val)", namespaces=ns)
+    return value or None
+
+
+def _set_style_based_on(styles_xml_path: Path, style_id: str, based_on: str):
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    root = etree.fromstring(styles_xml_path.read_bytes())
+    nodes = root.xpath(f"//w:style[@w:styleId='{style_id}']", namespaces=ns)
+    if not nodes:
+        return
+    node = nodes[0]
+    based_nodes = node.xpath("w:basedOn", namespaces=ns)
+    if based_nodes:
+        based_nodes[0].set(f"{{{ns['w']}}}val", based_on)
+    else:
+        based = etree.Element(f"{{{ns['w']}}}basedOn")
+        based.set(f"{{{ns['w']}}}val", based_on)
+        node.insert(1, based)
+    styles_xml_path.write_bytes(
+        etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone="yes")
+    )
+
+
+def test_cli_dump_styles_writes_styles_xml(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("Hello")
+
+    out_docx = tmp_path / "out.docx"
+    dumped = tmp_path / "styles.xml"
+    result = runner.invoke(
+        main,
+        [str(tex_path), "-o", str(out_docx), "--dump-styles", str(dumped)],
+    )
+    assert result.exit_code == 0
+    assert dumped.exists()
+    text = dumped.read_text(encoding="utf-8")
+    assert "<w:styles" in text
+
+
+def test_cli_injects_styles_xml(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\href{https://example.com}{x}")
+
+    base_docx = tmp_path / "base.docx"
+    Document().save(base_docx)
+    styles_xml = tmp_path / "styles.xml"
+    _extract_styles_xml(base_docx, styles_xml)
+    _set_style_based_on(styles_xml, "Caption", "Heading1")
+
+    out_docx = tmp_path / "out.docx"
+    result = runner.invoke(
+        main,
+        [str(tex_path), "-o", str(out_docx), "--styles-xml", str(styles_xml)],
+    )
+    assert result.exit_code == 0
+
+    extracted = tmp_path / "out_styles.xml"
+    _extract_styles_xml(out_docx, extracted)
+    assert _style_based_on(extracted, "Caption") == "Heading1"
+
+
+def test_cli_template_accepts_styles_xml_shorthand(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("Hello")
+
+    base_docx = tmp_path / "base.docx"
+    Document().save(base_docx)
+    styles_xml = tmp_path / "styles.xml"
+    _extract_styles_xml(base_docx, styles_xml)
+    _set_style_based_on(styles_xml, "Caption", "Heading1")
+
+    out_docx = tmp_path / "out.docx"
+    result = runner.invoke(
+        main,
+        [str(tex_path), "-o", str(out_docx), "--template", str(styles_xml)],
+    )
+    assert result.exit_code == 0
+
+    extracted = tmp_path / "out_styles.xml"
+    _extract_styles_xml(out_docx, extracted)
+    assert _style_based_on(extracted, "Caption") == "Heading1"
