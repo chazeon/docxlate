@@ -194,15 +194,13 @@ def register(latex):
         stack = latex.context.get("figure_stack", [])
         self_fragment = getattr(node, "attributes", {}).get("self")
         caption_ctx = RenderContext().with_para_role("caption")
-        with latex.render_frame(style=caption_ctx):
+        p = latex.add_paragraph_for_role("caption")
+        with latex.render_frame(paragraph=p, style=caption_ctx):
             if self_fragment is not None and getattr(self_fragment, "childNodes", None):
                 latex.render_nodes(self_fragment.childNodes)
             else:
                 text = latex.get_arg_text(node, 0, key="self")
                 latex.append_inline(text)
-        p = latex._active_paragraph()
-        if p is None:
-            p = latex.add_paragraph_for_role("caption")
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))

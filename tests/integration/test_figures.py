@@ -97,6 +97,13 @@ def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
         and "<wp:anchor" in pxml
         for pxml in xml_paragraphs
     )
+    # Caption textbox should not swallow the wrapped image drawing.
+    assert any(
+        ("http://schemas.microsoft.com/office/word/2010/wordprocessingShape" in pxml)
+        and ("Wrapped Figure Caption" in pxml)
+        and ("<pic:pic" not in pxml and "<a:blip" not in pxml)
+        for pxml in xml_paragraphs
+    )
 
 
 def test_wrapfigure_width_tracks_textwidth_fraction(tmp_path):
