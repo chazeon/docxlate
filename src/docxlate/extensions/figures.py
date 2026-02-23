@@ -10,6 +10,7 @@ from docxlate.docx_ext import (
     convert_inline_drawing_to_wrapped_anchor,
     insert_wrapped_caption_anchor,
 )
+from docxlate.model import RenderContext
 
 
 class includegraphics(Command):
@@ -194,15 +195,18 @@ def register(latex):
 
     @latex.command("caption", inline=True)
     def handle_caption(node):
-        p = latex.doc.add_paragraph(style="Caption") if "Caption" in [s.name for s in latex.doc.styles if s.type == 1] else latex.doc.add_paragraph()
         stack = latex.context.get("figure_stack", [])
         self_fragment = getattr(node, "attributes", {}).get("self")
-        with latex.render_frame(paragraph=p):
+        caption_ctx = RenderContext().with_para_role("caption")
+        with latex.render_frame(style=caption_ctx):
             if self_fragment is not None and getattr(self_fragment, "childNodes", None):
                 latex.render_nodes(self_fragment.childNodes)
             else:
                 text = latex.get_arg_text(node, 0, key="self")
                 latex.append_inline(text)
+        p = latex._active_paragraph()
+        if p is None:
+            p = latex.add_paragraph_for_role("caption")
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))

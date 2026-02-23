@@ -21,7 +21,7 @@ class RenderContext:
             return ctx
         return ctx.apply_style_delta(style).with_char_role(
             _as_optional_str(style.get("char_role"))
-        )
+        ).with_para_role(_as_optional_str(style.get("para_role")))
 
     def apply_style_delta(self, delta: Mapping[str, object] | None) -> "RenderContext":
         if not delta:

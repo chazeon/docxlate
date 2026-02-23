@@ -51,6 +51,8 @@ class LatexBridge:
                 "Body Text",
                 "Normal",
             ],
+            "equation": ["Equation", "Normal"],
+            "caption": ["Caption", "Normal"],
         }
         self._next_body_role = "first_body"
         self._inline_styles = {
@@ -395,6 +397,9 @@ class LatexBridge:
             return current
         return RenderContext()
 
+    def get_active_render_context(self) -> RenderContext:
+        return self._active_render_context()
+
     def _coerce_render_context(
         self, value: RenderContext | Mapping[str, object] | None
     ) -> RenderContext:
@@ -534,13 +539,14 @@ class LatexBridge:
         if self._active_frame_value("paragraph") is not None:
             return
         if self._current_paragraph is None:
-            role = self._next_body_role
+            role = self._active_render_context().para_role or self._next_body_role
             self._current_paragraph = self.emitter.begin_paragraph(
                 self.doc,
                 role=role,
                 style_table=self.style_table,
             )
-            self._next_body_role = "body"
+            if self._active_render_context().para_role is None:
+                self._next_body_role = "body"
 
     def mark_next_body_paragraph_first(self):
         self._next_body_role = "first_body"
@@ -600,8 +606,12 @@ class LatexBridge:
         *,
         number: str | None = None,
         paragraph=None,
+        para_role: str | None = None,
     ):
         if paragraph is None:
-            paragraph = self.emitter.begin_paragraph(self.doc, role=None, style_table=None)
+            role = para_role or self._active_render_context().para_role
+            paragraph = self.emitter.begin_paragraph(
+                self.doc, role=role, style_table=self.style_table
+            )
         self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str, number=number))
         return paragraph

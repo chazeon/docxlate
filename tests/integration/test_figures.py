@@ -35,6 +35,32 @@ def test_figure_renders_image_and_caption(tmp_path):
     assert "Figure Caption Text" in "\n".join(p.text for p in latex.doc.paragraphs)
 
 
+def test_caption_para_role_uses_style_table(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    original = dict(latex.style_table)
+    latex.style_table.update({"caption": ["Heading 2"]})
+    try:
+        tex = rf"""
+\begin{{figure}}
+\includegraphics{{{image_path.name}}}
+\caption{{Figure Caption Text}}
+\end{{figure}}
+"""
+        latex.run(tex)
+    finally:
+        latex.style_table = original
+
+    caption_para = next((p for p in latex.doc.paragraphs if "Figure Caption Text" in p.text), None)
+    assert caption_para is not None
+    assert caption_para.style.name == "Heading 2"
+
+
 def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)

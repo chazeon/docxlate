@@ -114,9 +114,9 @@ class ReferenceResolver:
             latex.append_inline(text)
             return
 
-        base_style = dict(latex._active_frame_value("style") or {})
-        with latex.render_frame(link={"anchor": anchor_name}, style=base_style):
-            latex.append_inline(text, style=base_style)
+        base_context = latex.get_active_render_context()
+        with latex.render_frame(link={"anchor": anchor_name}, style=base_context):
+            latex.append_inline(text)
 
     def append_external_link(self, latex, url: str, text: str):
         self._ensure_state()
@@ -124,9 +124,9 @@ class ReferenceResolver:
         if paragraph is None:
             return
 
-        base_style = dict(latex._active_frame_value("style") or {})
-        with latex.render_frame(link={"url": url}, style=base_style):
-            latex.append_inline(text, style=base_style)
+        base_context = latex.get_active_render_context()
+        with latex.render_frame(link={"url": url}, style=base_context):
+            latex.append_inline(text)
 
 
 def register(latex):
@@ -165,10 +165,10 @@ def register(latex):
     def handle_href(node):
         url = latex.get_arg_text(node, 0, key="url")
         text_fragment = getattr(node, "attributes", {}).get("self")
-        base_style = dict(latex._active_frame_value("style") or {})
+        base_context = latex.get_active_render_context()
         if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-            with latex.render_frame(link={"url": url}, style=base_style):
-                latex.render_nodes(text_fragment.childNodes, style=base_style)
+            with latex.render_frame(link={"url": url}, style=base_context):
+                latex.render_nodes(text_fragment.childNodes, style=base_context)
             return
         text = latex.get_arg_text(node, 1, key="self") or url
         resolver.append_external_link(latex, url, text)
@@ -178,10 +178,10 @@ def register(latex):
         label_name = latex.get_arg_text(node, 0, key="label")
         anchor_name = resolver.anchor_name(label_name)
         text_fragment = getattr(node, "attributes", {}).get("self")
-        base_style = dict(latex._active_frame_value("style") or {})
+        base_context = latex.get_active_render_context()
         if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-            with latex.render_frame(link={"anchor": anchor_name}, style=base_style):
-                latex.render_nodes(text_fragment.childNodes, style=base_style)
+            with latex.render_frame(link={"anchor": anchor_name}, style=base_context):
+                latex.render_nodes(text_fragment.childNodes, style=base_context)
             return
         text = latex.get_arg_text(node, 1, key="self") or resolver.resolve_ref_text(
             label_name

@@ -8,6 +8,7 @@ from .extensions import (
     register_hyperref_extension,
     register_lists_extension,
 )
+from .model import RenderContext
 from pathlib import Path
 from docx.shared import Pt, Inches
 import re
@@ -368,25 +369,34 @@ def handle_paragraph(node):
 
 @latex.env("equation")
 def handle_math(node):
-    p = latex.doc.add_paragraph()
     source = latex.get_math_source(node)
     resolver = getattr(latex, "reference_resolver", None)
     refs = latex.context.get("refs", {})
+    labels = re.findall(r"\\label\{([^}]+)\}", source)
     resolved_number: str | None = None
-    for label_name in re.findall(r"\\label\{([^}]+)\}", source):
+    for label_name in labels:
         ref_info = refs.get(label_name, {})
         ref_text = ref_info.get("ref_num")
         if resolved_number is None and ref_text is not None:
             resolved_number = str(ref_text)
-        if resolver is not None:
-            current_paragraph = latex._current_paragraph
-            latex._current_paragraph = p
-            resolver.register_label(
-                latex, label_name, ref_text=str(ref_text) if ref_text is not None else None
-            )
-            latex._current_paragraph = current_paragraph
     source = re.sub(r"\\label\{[^}]+\}", "", source).strip()
-    latex.emit_equation(source, number=resolved_number, paragraph=p)
+    equation_ctx = RenderContext().with_para_role("equation")
+    with latex.render_frame(style=equation_ctx):
+        p = latex.emit_equation(source, number=resolved_number)
+    if resolver is not None:
+        current_paragraph = latex._current_paragraph
+        latex._current_paragraph = p
+        try:
+            for label_name in labels:
+                ref_info = refs.get(label_name, {})
+                ref_text = ref_info.get("ref_num")
+                resolver.register_label(
+                    latex,
+                    label_name,
+                    ref_text=str(ref_text) if ref_text is not None else None,
+                )
+        finally:
+            latex._current_paragraph = current_paragraph
 
 
 @latex.command("cite", inline=True)

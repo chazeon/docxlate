@@ -71,6 +71,28 @@ def test_equation_without_labeled_aux_number_has_no_emitted_number():
     assert "(1.2)" not in text
 
 
+def test_equation_para_role_uses_style_table_and_preserves_first_body_role():
+    original = dict(latex.style_table)
+    latex.style_table.update(
+        {
+            "equation": ["Heading 3"],
+            "first_body": ["Heading 1"],
+            "body": ["Heading 2"],
+        }
+    )
+    try:
+        latex.run(r"\begin{equation}E=mc^2\end{equation} Body text.")
+    finally:
+        latex.style_table = original
+
+    paragraphs = latex.doc.paragraphs
+    assert len(paragraphs) >= 2
+    body_para = next((p for p in paragraphs if "Body text." in p.text), None)
+    assert body_para is not None
+    assert paragraphs[0].style.name == "Heading 3"
+    assert body_para.style.name == "Heading 1"
+
+
 def test_section_body_text_is_rendered_with_plastex():
     latex.run(r"\section{Introduction} Hello world.")
 

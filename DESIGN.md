@@ -95,6 +95,7 @@ Boundary rules:
 - Inline commands (e.g., `\textbf{...}`) derive a child-only context and do not mutate sibling-stream context.
 - `render_frame(style=...)` accepts mapping or typed context; mappings are composited against the active frame context.
 - Backends do not infer style inheritance; they only emit already-resolved `TextSpan`.
+- Block emit entry points (notably equation and caption) must source paragraph role from `RenderContext.para_role` when no explicit paragraph is passed.
 
 Planned backend API surface:
 - `begin_paragraph(role)` / `end_paragraph()`
