@@ -108,6 +108,17 @@ Note: `MML2OMML.XSL` is commonly available from local Microsoft Office installat
 - The converter includes body-only fallback and preamble metadata recovery (`\title`, `\author`, `\date`).
 - Parser skip lists (`parse_skip_packages`, `parse_skip_usepackage_paths`) help avoid known package failures.
 
+## Why Not Just Pandoc?
+
+`docxlate` is designed for workflows where LaTeX run artifacts matter.
+
+Unlike a source-only conversion path, `docxlate` can consume files produced by real LaTeX/BibLaTeX runs:
+- `.aux` for label/ref and citation-order signals
+- `.bbl` for bibliography entry content
+- `.bcf` as a fallback citation metadata source
+
+This makes cross-reference and citation behavior closer to the compiled LaTeX project state, especially in documents that depend on multi-pass resolution and bibliography tooling.
+
 ## Testing
 
 ```bash
