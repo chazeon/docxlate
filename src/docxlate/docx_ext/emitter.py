@@ -15,12 +15,17 @@ class DocxEmitterBackend:
         self.context = context
         self._active_link: LinkTarget | None = None
 
-    def begin_paragraph(self, doc, *, role: str | None = None, style_name: str | None = None):
-        # `role` is accepted for backend contract completeness; style resolution is
-        # currently performed by the caller and passed as `style_name`.
-        _ = role
-        if style_name:
-            return doc.add_paragraph(style=style_name)
+    def begin_paragraph(
+        self,
+        doc,
+        *,
+        role: str | None = None,
+        style_name: str | None = None,
+        style_table: dict | None = None,
+    ):
+        resolved = style_name or self._resolve_paragraph_style(doc, role, style_table)
+        if resolved:
+            return doc.add_paragraph(style=resolved)
         return doc.add_paragraph()
 
     def begin_link(self, target: LinkTarget):
@@ -78,3 +83,20 @@ class DocxEmitterBackend:
         warnings = self.context.setdefault("warnings", [])
         if msg not in warnings:
             warnings.append(msg)
+
+    def _resolve_paragraph_style(self, doc, role: str | None, style_table: dict | None):
+        if not role or not style_table:
+            return None
+        candidates = style_table.get(role, [])
+        if isinstance(candidates, str):
+            candidates = [candidates]
+        paragraph_styles = [style for style in doc.styles if style.type == 1]
+        styles_by_name = {style.name: style for style in paragraph_styles}
+        style_name_by_id = {style.style_id: style.name for style in paragraph_styles}
+        for candidate in candidates:
+            if candidate in styles_by_name:
+                return candidate
+            resolved_name = style_name_by_id.get(candidate)
+            if resolved_name:
+                return resolved_name
+        return None

@@ -515,34 +515,20 @@ class LatexBridge:
             return
         if self._current_paragraph is None:
             role = self._next_body_role
-            style_name = self._resolve_paragraph_style(role)
             self._current_paragraph = self.emitter.begin_paragraph(
-                self.doc, role=role, style_name=style_name
+                self.doc,
+                role=role,
+                style_table=self.style_table,
             )
             self._next_body_role = "body"
-
-    def _resolve_paragraph_style(self, role):
-        candidates = self.style_table.get(role, [])
-        if isinstance(candidates, str):
-            candidates = [candidates]
-        paragraph_styles = [style for style in self.doc.styles if style.type == 1]
-        styles_by_name = {style.name: style for style in paragraph_styles}
-        style_name_by_id = {style.style_id: style.name for style in paragraph_styles}
-
-        for candidate in candidates:
-            if candidate in styles_by_name:
-                return candidate
-            resolved_name = style_name_by_id.get(candidate)
-            if resolved_name:
-                return resolved_name
-        return None
 
     def mark_next_body_paragraph_first(self):
         self._next_body_role = "first_body"
 
     def add_paragraph_for_role(self, role):
-        style_name = self._resolve_paragraph_style(role)
-        return self.emitter.begin_paragraph(self.doc, role=role, style_name=style_name)
+        return self.emitter.begin_paragraph(
+            self.doc, role=role, style_table=self.style_table
+        )
 
     def _append_text(self, text, style):
         self._ensure_paragraph()
@@ -559,20 +545,6 @@ class LatexBridge:
 
     def _active_paragraph(self):
         return self._active_frame_value("paragraph") or self._current_paragraph
-
-    def _append_hyperlink_run(self, paragraph, text, link, style):
-        style_map = style or {}
-        span = TextSpan(
-            text=text,
-            style=self._style_from_mapping(style_map),
-            char_role=style_map.get("char_role"),
-        )
-        link_target = self._link_from_frame(link)
-        self.emitter.begin_link(link_target)
-        try:
-            self.emitter.emit_span(paragraph, span)
-        finally:
-            self.emitter.end_link()
 
     def _flush_paragraph(self):
         self._current_paragraph = None
@@ -605,7 +577,7 @@ class LatexBridge:
         paragraph=None,
     ):
         if paragraph is None:
-            paragraph = self.doc.add_paragraph()
+            paragraph = self.emitter.begin_paragraph(self.doc, role=None, style_table=None)
         self.emitter.emit_equation(paragraph, EquationSpec(latex=latex_str, number=number))
         return paragraph
 
