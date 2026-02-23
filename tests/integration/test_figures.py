@@ -162,14 +162,13 @@ Body after.
         None,
     )
     assert body_idx is not None
-    assert body_idx >= 1
-    anchor_para = latex.doc.paragraphs[body_idx - 1]
-    assert "<wp:anchor" in anchor_para._element.xml
-    assert anchor_para.text.strip() == ""
-    # No additional plain empty paragraph should be inserted between wrap anchor and body.
-    if body_idx >= 2:
-        between = latex.doc.paragraphs[body_idx - 2 : body_idx]
-        assert not any((not p.text.strip()) and "<wp:anchor" not in p._element.xml for p in between)
+    body_para = latex.doc.paragraphs[body_idx]
+    assert "<wp:anchor" in body_para._element.xml
+    assert "Body after." in body_para.text
+    # No standalone anchor-only paragraph should be inserted before body.
+    if body_idx >= 1:
+        prev = latex.doc.paragraphs[body_idx - 1]
+        assert not ("<wp:anchor" in prev._element.xml and not prev.text.strip())
 
 
 def test_caption_template_renders_number_and_caption_text():

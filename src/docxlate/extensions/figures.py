@@ -382,6 +382,10 @@ def register(latex):
                     latex.render_nodes(node.childNodes)
             finally:
                 latex.context["_suppress_whitespace_text"] = previous_suppress
+            # Keep following paragraph text in the same anchor host paragraph so
+            # Word does not show a standalone blank line for wrap anchors.
+            latex._current_paragraph = p
+            latex.context["_skip_next_par_break_once"] = True
             # Keep this anchor paragraph available so following body text can
             # share it instead of creating an empty line before content.
             latex.context["_preserve_paragraph_after_env_once"] = True

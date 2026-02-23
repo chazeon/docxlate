@@ -303,6 +303,9 @@ class LatexBridge:
                 active_ctx = self._walk(self._node_children(node), active_ctx)
                 continue
             if name == "par":
+                if self.context.pop("_skip_next_par_break_once", False):
+                    active_ctx = self._walk(self._node_children(node), active_ctx)
+                    continue
                 paragraph = self._active_paragraph()
                 preserve_flag = bool(self.context.get("_preserve_paragraph_once"))
                 preserve_current = preserve_flag or (
