@@ -295,6 +295,16 @@ def handle_section(node):
     _handle_section(node)
 
 
+@latex.command("subsection")
+def handle_subsection(node):
+    _handle_section(node)
+
+
+@latex.command("subsubsection")
+def handle_subsubsection(node):
+    _handle_section(node)
+
+
 @latex.command("title", inline=True)
 def handle_title(node):
     _store_front_matter_tex(node, "title")
@@ -351,7 +361,7 @@ def handle_paragraph(node):
         else:
             title = latex.get_arg_text(node, 0, key="title")
             latex.append_inline(title, style={"bold": True, "theme": "major"})
-        latex.append_inline(". ", style={"bold": True, "theme": "major"})
+        latex.append_inline(" ", style={"bold": True, "theme": "major"})
         latex.context["_preserve_paragraph_once"] = True
         latex.render_nodes(node.childNodes)
 

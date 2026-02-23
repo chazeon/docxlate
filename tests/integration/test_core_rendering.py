@@ -14,6 +14,15 @@ def test_section_heading_maps_to_word_heading():
     assert latex.doc.paragraphs[0].text == "Intro"
 
 
+def test_subsection_and_subsubsection_map_to_heading_levels():
+    latex.run(r"\section{Top}\subsection{Mid}\subsubsection{Low}")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    assert [p.text for p in nonempty[:3]] == ["Top", "Mid", "Low"]
+    assert nonempty[0].style.name == "Heading 1"
+    assert nonempty[1].style.name == "Heading 2"
+    assert nonempty[2].style.name == "Heading 3"
+
+
 def test_inline_formatting_bold_italic():
     latex.run(r"\textbf{B} \emph{I}")
 
@@ -177,6 +186,15 @@ def test_paragraph_heading_with_inline_math_renders_math():
     )
     assert 'w:firstLine="0"' in heading_para._element.xml
     assert 'w:left="0"' in heading_para._element.xml
+
+
+def test_paragraph_heading_does_not_force_trailing_dot():
+    latex.run(r"\paragraph{Overview} Body.")
+    para = next((p for p in latex.doc.paragraphs if p.text.strip()), None)
+    assert para is not None
+    normalized = " ".join(para.text.split())
+    assert "Overview Body." in normalized
+    assert "Overview. Body." not in para.text
 
 
 @pytest.mark.parametrize(
