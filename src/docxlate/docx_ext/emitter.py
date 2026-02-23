@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import contextmanager
 
 from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
@@ -35,6 +36,17 @@ class DocxEmitterBackend:
 
     def end_link(self):
         self._active_link = None
+
+    @contextmanager
+    def link_scope(self, target: LinkTarget):
+        self.begin_link(target)
+        try:
+            yield
+        finally:
+            self.end_link()
+
+    def has_active_link(self) -> bool:
+        return self._active_link is not None
 
     def emit_span(self, paragraph, span: TextSpan):
         if self._active_link is None:

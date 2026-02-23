@@ -364,19 +364,21 @@ class LatexBridge:
         frame = {}
         if paragraph is not None:
             frame["paragraph"] = paragraph
-        if link is not None:
-            link_target = self._link_from_frame(link)
-            frame["link"] = link_target
-            self.emitter.begin_link(link_target)
         if style is not None:
             frame["style"] = style
         self._render_stack.append(frame)
-        try:
-            yield
-        finally:
-            self._render_stack.pop()
-            if link is not None:
-                self.emitter.end_link()
+        link_target = LinkTarget.from_value(link)
+        if link_target is None:
+            try:
+                yield
+            finally:
+                self._render_stack.pop()
+            return
+        with self.emitter.link_scope(link_target):
+            try:
+                yield
+            finally:
+                self._render_stack.pop()
 
     def _active_frame_value(self, key):
         for frame in reversed(self._render_stack):
@@ -563,7 +565,7 @@ class LatexBridge:
         paragraph = self._active_paragraph()
         if paragraph is None:
             return
-        if self._active_frame_value("link") is not None:
+        if self.emitter.has_active_link():
             # DOCX hyperlinks don't safely embed OMML; keep math text visible.
             self._append_text(latex_str, {"theme": "minor"})
             return
@@ -589,19 +591,3 @@ class LatexBridge:
             small_caps=bool(style.get("small_caps", False)),
             monospace=bool(style.get("monospace", False)),
         )
-
-    def _link_from_frame(self, link) -> LinkTarget | None:
-        if not link:
-            return None
-        if isinstance(link, LinkTarget):
-            return link
-        target = link.get("_target_obj")
-        if isinstance(target, LinkTarget):
-            return target
-        target = LinkTarget(
-            anchor=link.get("anchor"),
-            url=link.get("url"),
-            rel_id=link.get("rel_id"),
-        )
-        link["_target_obj"] = target
-        return target

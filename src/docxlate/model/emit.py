@@ -18,6 +18,16 @@ class LinkTarget:
     url: str | None = None
     rel_id: str | None = None
 
+    @classmethod
+    def from_value(cls, value) -> "LinkTarget | None":
+        if not value:
+            return None
+        if isinstance(value, cls):
+            return value
+        if not isinstance(value, dict):
+            return None
+        return cls(anchor=value.get("anchor"), url=value.get("url"), rel_id=value.get("rel_id"))
+
 
 @dataclass(frozen=True)
 class TextSpan:
