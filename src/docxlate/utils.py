@@ -7,6 +7,7 @@ from pathlib import Path
 
 MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
 OMML_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 _XSLT_CACHE: dict[str, etree.XSLT] = {}
 _OMML_NS = {"m": OMML_NAMESPACE}
@@ -52,6 +53,7 @@ def inject_omml(
         # Never let post-processing break core math rendering.
         try:
             _normalize_omml_script_bases(omml_result)
+            _apply_native_math_run_properties(omml_result, color=color)
         except Exception:
             pass
         omml_node = _coerce_omml_node(omml_result)
@@ -92,6 +94,39 @@ def _apply_text_run_color(run, color: str | None) -> None:
         run.font.color.rgb = RGBColor.from_string(color)
     except Exception:
         return
+
+
+def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
+    """
+    Match Word-native pattern observed in edited DOCX:
+    each m:r carries a direct w:rPr child (with Cambria Math fonts,
+    and optional w:color for scoped math coloring).
+    """
+    root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
+    for m_run in root.xpath(".//m:r", namespaces=_OMML_NS):
+        w_rpr = m_run.find(_wtag("rPr"))
+        if w_rpr is None:
+            w_rpr = etree.Element(qn("w:rPr"))
+            m_run.insert(0, w_rpr)
+        r_fonts = w_rpr.find(_wtag("rFonts"))
+        if r_fonts is None:
+            r_fonts = etree.Element(qn("w:rFonts"))
+            w_rpr.append(r_fonts)
+        if r_fonts.get(qn("w:ascii")) is None:
+            r_fonts.set(qn("w:ascii"), "Cambria Math")
+        if r_fonts.get(qn("w:hAnsi")) is None:
+            r_fonts.set(qn("w:hAnsi"), "Cambria Math")
+        if not color:
+            continue
+        w_color = w_rpr.find(_wtag("color"))
+        if w_color is None:
+            w_color = etree.Element(qn("w:color"))
+            w_rpr.append(w_color)
+        w_color.set(qn("w:val"), color)
+
+
+def _wtag(local: str) -> str:
+    return f"{{{WORD_NAMESPACE}}}{local}"
 
 
 def _coerce_omml_node(omml_root):
