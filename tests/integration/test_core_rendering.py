@@ -266,6 +266,14 @@ def test_paragraph_heading_does_not_force_trailing_dot():
     assert "Overview. Body." not in para.text
 
 
+def test_paragraph_heading_does_not_double_space_before_body():
+    latex.run("\\paragraph{Cai-Zhuang Wang}\n (Ames Laboratory) is here.")
+    para = next((p for p in latex.doc.paragraphs if p.text.strip()), None)
+    assert para is not None
+    assert "Cai-Zhuang Wang  (Ames Laboratory)" not in para.text
+    assert "Cai-Zhuang Wang (Ames Laboratory)" in para.text
+
+
 def test_noindent_sets_first_line_indent_on_current_paragraph():
     latex.run(r"\noindent First line.")
     para = next((p for p in latex.doc.paragraphs if "First line." in p.text), None)
