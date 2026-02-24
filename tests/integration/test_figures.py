@@ -171,6 +171,31 @@ Body after.
         assert not ("<wp:anchor" in prev._element.xml and not prev.text.strip())
 
 
+def test_wrapfigure_after_body_text_has_no_empty_anchor_only_paragraph(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+Intro paragraph before wrap.
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Wrapped Figure Caption}}
+\end{{wrapfigure}}
+
+Body after wrap.
+"""
+    latex.run(tex)
+
+    anchor_paragraphs = [p for p in latex.doc.paragraphs if "<wp:anchor" in p._element.xml]
+    assert anchor_paragraphs, "Expected at least one wrap anchor paragraph"
+    assert all(p.text.strip() for p in anchor_paragraphs)
+
+
 def test_caption_template_renders_number_and_caption_text():
     latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
     latex.context["refs"] = {"fig:demo": {"ref_num": "12"}}

@@ -141,6 +141,16 @@ def _estimate_caption_box_height_emu(text: str, box_cx_emu: int) -> int:
     return max(320000, line_count * line_height_emu + padding)
 
 
+def _trim_trailing_whitespace_runs(paragraph):
+    # Remove trailing whitespace-only text runs on anchor host paragraphs.
+    while paragraph.runs:
+        run = paragraph.runs[-1]
+        text = run.text or ""
+        if not text or not text.isspace():
+            break
+        run._r.getparent().remove(run._r)
+
+
 def _caption_template_env() -> JinjaEnvironment:
     return JinjaEnvironment(
         autoescape=False,
@@ -361,9 +371,14 @@ def register(latex):
         lines = latex.get_arg_text(node, 0, key="lines")
         place = latex.get_arg_text(node, 0, key="place")
         width = latex.get_arg_text(node, 1, key="width")
-        p = latex.add_paragraph_for_role("body")
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(0)
+        created_anchor_host = False
+        if latex.doc.paragraphs:
+            p = latex.doc.paragraphs[-1]
+        else:
+            p = latex.add_paragraph_for_role("body")
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
+            created_anchor_host = True
         stack = latex.context.setdefault("figure_stack", [])
         stack.append(
             {
@@ -382,13 +397,13 @@ def register(latex):
                     latex.render_nodes(node.childNodes)
             finally:
                 latex.context["_suppress_whitespace_text"] = previous_suppress
-            # Keep following paragraph text in the same anchor host paragraph so
-            # Word does not show a standalone blank line for wrap anchors.
-            latex._current_paragraph = p
-            latex.context["_skip_next_par_break_once"] = True
-            # Keep this anchor paragraph available so following body text can
-            # share it instead of creating an empty line before content.
-            latex.context["_preserve_paragraph_after_env_once"] = True
+            _trim_trailing_whitespace_runs(p)
+            if created_anchor_host:
+                # If wrapfigure appears at the top before any body text exists,
+                # reuse this host for the immediate following paragraph content.
+                latex._current_paragraph = p
+                latex.context["_skip_next_par_break_once"] = True
+                latex.context["_preserve_paragraph_after_env_once"] = True
         finally:
             stack.pop()
 
