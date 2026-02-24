@@ -66,6 +66,14 @@ def test_validate_runtime_config_rejects_non_mapping_plugin_block():
         validate_runtime_config({"plugins": {"figure": 123}})
 
 
+def test_validate_runtime_config_unknown_plugin_key_shows_available_keys():
+    with pytest.raises(ValueError) as exc_info:
+        validate_runtime_config({"plugins": {"figure": {"unknown_field": 1}}})
+    message = str(exc_info.value)
+    assert "plugins.figure.unknown_field: Extra inputs are not permitted" in message
+    assert "Available keys: caption_template, image" in message
+
+
 def test_validate_runtime_config_rejects_non_positive_indent():
     with pytest.raises(ValidationError):
         validate_runtime_config({"bibliography_indent_in": 0})
@@ -155,7 +163,7 @@ def test_validate_runtime_config_rejects_invalid_shorthand_shapes():
         validate_runtime_config(
             {"plugins": {"figure": {"image": {"wrap": {"pad": [0.1, 0.2]}}}}}
         )
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         validate_runtime_config(
             {"plugins": {"figure": {"image": {"wrap": {"pad": {"x": 0.1}}}}}}
         )
@@ -182,7 +190,7 @@ def test_validate_runtime_config_accepts_shift_xy_list():
 
 
 def test_validate_runtime_config_rejects_invalid_shift_mapping():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         validate_runtime_config(
             {"plugins": {"figure": {"image": {"wrap": {"shift": {"z": 0.1}}}}}}
         )

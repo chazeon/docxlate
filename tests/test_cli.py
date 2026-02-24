@@ -118,6 +118,35 @@ def test_cli_rejects_invalid_yaml_config(tmp_path):
     assert "Invalid config" in result.output
 
 
+def test_cli_invalid_legacy_top_level_image_key_shows_migration_hint(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("Hello")
+    config_path = tmp_path / "invalid.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "image:",
+                "  kind: wrap",
+                "  wrap:",
+                "    gap: 0.2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        cli,
+        ["convert", str(tex_path), "--config", str(config_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "Configuration validation failed" in result.output
+    assert "image: Extra inputs are not permitted" in result.output
+    assert "Available keys:" in result.output
+    assert "plugins" in result.output
+
+
 def _extract_styles_xml(docx_path: Path, out_path: Path):
     with ZipFile(docx_path, "r") as zf:
         out_path.write_bytes(zf.read("word/styles.xml"))

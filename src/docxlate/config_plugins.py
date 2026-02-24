@@ -29,4 +29,13 @@ def get_extension_plugin(name: str) -> ExtensionPlugin | None:
     return _PLUGINS.get(name)
 
 
-__all__ = ["ExtensionPlugin", "get_extension_plugin", "register_extension_plugin"]
+def list_extension_plugin_names() -> list[str]:
+    return sorted(_PLUGINS.keys())
+
+
+__all__ = [
+    "ExtensionPlugin",
+    "get_extension_plugin",
+    "list_extension_plugin_names",
+    "register_extension_plugin",
+]

@@ -10,7 +10,7 @@ import click
 import yaml
 from pydantic import ValidationError
 from .bcf import declared_fields_from_bcf, parse_bcf
-from .config import validate_runtime_config
+from .config import format_runtime_config_error, validate_runtime_config
 from .handlers import latex
 
 
@@ -192,7 +192,10 @@ def convert_main(tex_path, output, template, config, styles_xml):
             try:
                 latex.context.update(validate_runtime_config(loaded))
             except (ValidationError, ValueError) as exc:
-                raise click.ClickException(f"Invalid config at {config_path}: {exc}") from exc
+                detail = format_runtime_config_error(exc)
+                raise click.ClickException(
+                    f"Invalid config at {config_path}:\n{detail}"
+                ) from exc
 
         latex.context['tex_path'] = tex_path  # Store the path for potential .aux loading in handlers
         latex.run(tex_content)
