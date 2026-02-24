@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from docxlate.config import SideBox, validate_runtime_config
+from docxlate.config import Edges, validate_runtime_config
 
 
 def test_validate_runtime_config_accepts_known_fields():
@@ -23,7 +23,7 @@ def test_validate_runtime_config_accepts_known_fields():
             "pad": [0.05, 0.3, 0.06, 0.2],
             "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
             "gap": 0.2,
-            "offset": {"y": 0.1},
+            "shift": {"y": 0.1},
         },
         },
     }
@@ -49,7 +49,7 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["image"]["wrap"]["inset"]["top"] == 0.03
     assert validated["image"]["wrap"]["inset"]["bottom"] == 0.04
     assert validated["image"]["wrap"]["gap"] == 0.2
-    assert validated["image"]["wrap"]["offset"]["y"] == 0.1
+    assert validated["image"]["wrap"]["shift"]["y"] == 0.1
 
 
 def test_validate_runtime_config_rejects_unknown_fields():
@@ -150,23 +150,23 @@ def test_validate_runtime_config_rejects_negative_shorthand_values():
 
 
 def test_validate_runtime_config_accepts_offset_scalar_and_mapping():
-    v1 = validate_runtime_config({"image": {"wrap": {"offset": 0.25}}})
-    v2 = validate_runtime_config({"image": {"wrap": {"offset": {"y": 0.25}}}})
-    assert v1["image"]["wrap"]["offset"]["y"] == 0.25
-    assert v2["image"]["wrap"]["offset"]["y"] == 0.25
+    v1 = validate_runtime_config({"image": {"wrap": {"shift": 0.25}}})
+    v2 = validate_runtime_config({"image": {"wrap": {"shift": {"y": 0.25}}}})
+    assert v1["image"]["wrap"]["shift"]["y"] == 0.25
+    assert v2["image"]["wrap"]["shift"]["y"] == 0.25
 
 
 def test_validate_runtime_config_accepts_offset_xy_list():
-    v = validate_runtime_config({"image": {"wrap": {"offset": [0.1, 0.2]}}})
-    assert v["image"]["wrap"]["offset"]["x"] == 0.1
-    assert v["image"]["wrap"]["offset"]["y"] == 0.2
+    v = validate_runtime_config({"image": {"wrap": {"shift": [0.1, 0.2]}}})
+    assert v["image"]["wrap"]["shift"]["x"] == 0.1
+    assert v["image"]["wrap"]["shift"]["y"] == 0.2
 
 
 def test_validate_runtime_config_rejects_invalid_offset_mapping():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"image": {"wrap": {"offset": {"z": 0.1}}}})
+        validate_runtime_config({"image": {"wrap": {"shift": {"z": 0.1}}}})
     with pytest.raises(ValidationError):
-        validate_runtime_config({"image": {"wrap": {"offset": [0.1]}}})
+        validate_runtime_config({"image": {"wrap": {"shift": [0.1]}}})
 
 
 def test_validate_runtime_config_accepts_gap_in_alias():
@@ -175,6 +175,6 @@ def test_validate_runtime_config_accepts_gap_in_alias():
 
 
 def test_sidebox_list_and_mapping_inputs_are_equal():
-    from_list = SideBox.from_input([1, 1, 1, 1])
-    from_mapping = SideBox.from_input({"top": 1, "right": 1, "bottom": 1, "left": 1})
+    from_list = Edges.from_input([1, 1, 1, 1])
+    from_mapping = Edges.from_input({"top": 1, "right": 1, "bottom": 1, "left": 1})
     assert from_list == from_mapping

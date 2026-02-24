@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
-class SideBox(BaseModel):
+class Edges(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     @staticmethod
@@ -22,7 +22,7 @@ class SideBox(BaseModel):
     left: float | None = _field("left", "l")
 
     @classmethod
-    def from_input(cls, value: Any) -> "SideBox | None":
+    def from_input(cls, value: Any) -> "Edges | None":
         if value is None:
             return None
         if isinstance(value, cls):
@@ -42,14 +42,14 @@ class SideBox(BaseModel):
         raise ValueError("side box value must be a number, 4-number list, or mapping")
 
 
-class Offset2D(BaseModel):
+class Point(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     x: float | None = None
     y: float | None = None
 
     @classmethod
-    def from_input(cls, value: Any) -> "Offset2D | None":
+    def from_input(cls, value: Any) -> "Point | None":
         if value is None:
             return None
         if isinstance(value, cls):
@@ -58,12 +58,12 @@ class Offset2D(BaseModel):
             return cls(y=float(value))
         if isinstance(value, (list, tuple)):
             if len(value) != 2:
-                raise ValueError("offset list input must contain exactly 2 numbers: [x, y]")
+                raise ValueError("shift list input must contain exactly 2 numbers: [x, y]")
             x, y = value
             return cls(x=float(x), y=float(y))
         if isinstance(value, dict):
             return cls.model_validate(value)
-        raise ValueError("offset value must be a number, 2-number list, or mapping")
+        raise ValueError("shift value must be a number, 2-number list, or mapping")
 
 
 class RuntimeConfig(BaseModel):
@@ -86,27 +86,30 @@ class RuntimeConfig(BaseModel):
 class ImageWrapConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    pad: SideBox | None = Field(
+    pad: Edges | None = Field(
         default=None,
         validation_alias=AliasChoices("pad", "wrap"),
     )
-    inset: SideBox | None = None
+    inset: Edges | None = None
     gap: float | None = Field(
         default=None,
         ge=0,
         validation_alias=AliasChoices("gap", "gap_in", "caption_gap_in"),
     )
-    offset: Offset2D | None = None
+    shift: Point | None = Field(
+        default=None,
+        validation_alias=AliasChoices("shift", "offset"),
+    )
 
     @field_validator("pad", "inset", mode="before")
     @classmethod
     def _parse_side_box(cls, value):
-        return SideBox.from_input(value)
+        return Edges.from_input(value)
 
-    @field_validator("offset", mode="before")
+    @field_validator("shift", mode="before")
     @classmethod
-    def _parse_offset(cls, value):
-        return Offset2D.from_input(value)
+    def _parse_shift(cls, value):
+        return Point.from_input(value)
 
 
 class ImageConfig(BaseModel):
@@ -123,8 +126,8 @@ def validate_runtime_config(data: dict) -> dict:
 
 __all__ = [
     "RuntimeConfig",
-    "SideBox",
-    "Offset2D",
+    "Edges",
+    "Point",
     "ImageConfig",
     "ImageWrapConfig",
     "ValidationError",

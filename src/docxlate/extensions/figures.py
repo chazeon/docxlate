@@ -177,9 +177,14 @@ def _wrap_offset_y_emu(latex) -> int:
     if isinstance(image_cfg, dict):
         wrap_cfg = image_cfg.get("wrap")
         if isinstance(wrap_cfg, dict):
-            offset = wrap_cfg.get("offset")
-            if isinstance(offset, dict):
-                value = offset.get("y")
+            shift = wrap_cfg.get("shift")
+            if isinstance(shift, dict):
+                value = shift.get("y")
+            if value is None:
+                # Backward-compatible alias.
+                offset = wrap_cfg.get("offset")
+                if isinstance(offset, dict):
+                    value = offset.get("y")
     if value is None:
         return 0
     try:
