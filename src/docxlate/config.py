@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .config_plugins import get_config_plugin
+from .config_plugins import get_extension_plugin
 from .extensions import ensure_config_plugins_registered
 
 
@@ -33,7 +33,7 @@ def validate_runtime_config(data: dict) -> dict:
 
     context: dict = dict(dumped)
     for plugin_name, raw_config in plugin_blocks.items():
-        plugin = get_config_plugin(plugin_name)
+        plugin = get_extension_plugin(plugin_name)
         if plugin is None:
             raise ValueError(
                 f"Unknown plugin config namespace: '{plugin_name}'. "
@@ -43,10 +43,10 @@ def validate_runtime_config(data: dict) -> dict:
             raise ValueError(
                 f"Plugin config for '{plugin_name}' must be a mapping/object."
             )
-        plugin_values = plugin.model.model_validate(raw_config).model_dump(
+        plugin_values = plugin.config_model.model_validate(raw_config).model_dump(
             exclude_none=True, exclude_unset=True
         )
-        plugin.apply(context, plugin_values)
+        plugin.apply_config(context, plugin_values)
 
     return context
 

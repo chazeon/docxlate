@@ -4,7 +4,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from docxlate.config_plugins import register_config_plugin
 from docxlate.model import Edges, Point
 
 
@@ -40,24 +39,8 @@ class FigureConfig(BaseModel):
     caption_template: str | None = None
     image: ImageConfig | None = None
 
-
-def apply_config(context: dict, values: dict) -> None:
-    plugins = context.setdefault("plugins", {})
-    plugins["figure"] = values
-
-
-def register_plugin() -> None:
-    register_config_plugin(
-        "figure",
-        model=FigureConfig,
-        apply=apply_config,
-    )
-
-
 __all__ = [
     "FigureConfig",
     "ImageConfig",
     "WrapConfig",
-    "apply_config",
-    "register_plugin",
 ]

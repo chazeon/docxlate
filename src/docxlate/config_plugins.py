@@ -1,28 +1,32 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable
+from abc import ABC, abstractmethod
 
 from pydantic import BaseModel
 
 
-@dataclass(frozen=True)
-class ConfigPlugin:
-    model: type[BaseModel]
-    apply: Callable[[dict, dict], None]
+class ExtensionPlugin(ABC):
+    name: str
+    config_model: type[BaseModel]
+
+    @abstractmethod
+    def register_runtime(self, latex) -> None:
+        """Register macros/handlers on a LatexBridge."""
+
+    def apply_config(self, context: dict, values: dict) -> None:
+        plugins = context.setdefault("plugins", {})
+        plugins[self.name] = values
 
 
-_PLUGINS: dict[str, ConfigPlugin] = {}
+_PLUGINS: dict[str, ExtensionPlugin] = {}
 
 
-def register_config_plugin(
-    name: str, *, model: type[BaseModel], apply: Callable[[dict, dict], None]
-) -> None:
-    _PLUGINS[name] = ConfigPlugin(model=model, apply=apply)
+def register_extension_plugin(plugin: ExtensionPlugin) -> None:
+    _PLUGINS[plugin.name] = plugin
 
 
-def get_config_plugin(name: str) -> ConfigPlugin | None:
+def get_extension_plugin(name: str) -> ExtensionPlugin | None:
     return _PLUGINS.get(name)
 
 
-__all__ = ["ConfigPlugin", "get_config_plugin", "register_config_plugin"]
+__all__ = ["ExtensionPlugin", "get_extension_plugin", "register_extension_plugin"]
