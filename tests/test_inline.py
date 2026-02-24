@@ -98,6 +98,12 @@ def test_tex_quotes_are_preserved_in_text_stream():
     assert latex.doc.paragraphs[0].text == "He said: ``Hello'' and left."
 
 
+def test_textquote_commands_render_typographic_quotes():
+    _reset_router()
+    latex.run(r"He said: \textquotedblleft Hello\textquotedblright.")
+    assert latex.doc.paragraphs[0].text == "He said: “Hello”."
+
+
 def test_double_backslash_linebreak_keeps_neighboring_text():
     _reset_router()
     latex.run(r"A\\B")

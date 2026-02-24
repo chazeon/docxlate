@@ -115,3 +115,26 @@ def test_invalid_href_target_is_rendered_as_plain_text_without_relationship():
     assert not any("plasTeX.TeXFragment" in getattr(rel, "target_ref", "") for rel in rels.values())
     warnings = latex.context.get("warnings", [])
     assert any("Skipped invalid hyperlink target" in w for w in warnings)
+
+
+def test_bibliography_fragment_uses_main_preamble_macros():
+    latex.context["bbl_entries"] = {
+        "KeyA": {
+            "fields": {"title": "Sample Title"},
+            "authors": [],
+            "lists": {},
+            "type": "article",
+            "key": "KeyA",
+        }
+    }
+    latex.context["cite_order"] = {"KeyA": 1}
+    latex.context["bibliography_template"] = r"\mydecorate{<< fields.title >>}"
+    tex = r"""
+\newcommand{\mydecorate}[1]{PRE:#1:POST}
+\begin{document}
+Body text.
+\end{document}
+"""
+    latex.run(tex)
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "PRE:Sample Title:POST" in text

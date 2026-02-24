@@ -149,6 +149,7 @@ class LatexBridge:
         from plasTeX.TeX import TeX
 
         parse_source = self._sanitize_source_for_parse(tex_source)
+        self.context["_parse_preamble_source"] = self._extract_preamble_source(parse_source)
         parsed = None
         parse_error = None
         try:
@@ -188,6 +189,13 @@ class LatexBridge:
                 )
                 return fallback_tex.parse()
         return parsed
+
+    def _extract_preamble_source(self, tex_source: str) -> str | None:
+        marker = r"\begin{document}"
+        idx = tex_source.find(marker)
+        if idx == -1:
+            return None
+        return tex_source[:idx]
 
     def _sanitize_source_for_parse(self, tex_source: str) -> str:
         skip_packages = set(
@@ -375,7 +383,14 @@ class LatexBridge:
         tex = TeX()
         for macro_name, macro_class in self.macro_handlers.items():
             tex.ownerDocument.context.addGlobal(macro_name, macro_class)
-        tex.input(tex_source)
+        preamble = self.context.get("_parse_preamble_source")
+        if preamble:
+            fragment_source = (
+                f"{preamble}\n\\begin{{document}}\n{tex_source}\n\\end{{document}}\n"
+            )
+        else:
+            fragment_source = tex_source
+        tex.input(fragment_source)
         parsed = tex.parse()
         nodes = self._root_nodes(parsed)
         with self.render_frame(paragraph=paragraph):
@@ -438,6 +453,10 @@ class LatexBridge:
             "{": "{",
             "}": "}",
             "textbackslash": "\\",
+            "textquotedblleft": "“",
+            "textquotedblright": "”",
+            "textquoteleft": "‘",
+            "textquoteright": "’",
         }
         if node_name in literal_map:
             return literal_map[node_name]

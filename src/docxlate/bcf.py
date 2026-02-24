@@ -6,6 +6,22 @@ from xml.etree import ElementTree as ET
 BCF_NS = {"bcf": "https://sourceforge.net/projects/biblatex"}
 
 
+def declared_fields_from_bcf(fname: str | Path) -> set[str]:
+    """
+    Return field names declared in BCF datamodel/style metadata.
+    """
+    tree = ET.parse(fname)
+    root = tree.getroot()
+    fields: set[str] = set()
+
+    for field in root.findall(".//bcf:field", BCF_NS):
+        value = (field.text or "").strip()
+        if value:
+            fields.add(value)
+
+    return fields
+
+
 def parse_bcf(fname: str | Path) -> dict[str, int]:
     """
     Return the earliest citation order for each cite key declared in a BCF.

@@ -13,6 +13,28 @@ def _reset_router():
     latex.context.clear()
 
 
+def _write_minimal_bcf(path: Path):
+    path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<bcf:controlfile xmlns:bcf="https://sourceforge.net/projects/biblatex">
+  <bcf:section number="0">
+    <bcf:citekey order="1">KeyA</bcf:citekey>
+    <bcf:citekey order="2">KeyB</bcf:citekey>
+  </bcf:section>
+  <bcf:datamodel>
+    <bcf:fields>
+      <bcf:field>note</bcf:field>
+      <bcf:field>pubstate</bcf:field>
+      <bcf:field>isbn</bcf:field>
+      <bcf:field>url</bcf:field>
+    </bcf:fields>
+  </bcf:datamodel>
+</bcf:controlfile>
+""",
+        encoding="utf-8",
+    )
+
+
 def test_cli_bridge_runs(tmp_path):
     _reset_router()
     tex_path = Path('test.tex')
@@ -256,3 +278,32 @@ def test_cli_template_chain_applies_docx_then_xml_override(tmp_path):
     extracted = tmp_path / "out_styles.xml"
     _extract_styles_xml(out_docx, extracted)
     assert _style_based_on(extracted, "Caption") == "Heading1"
+
+
+def test_cli_check_bcf_reports_present_fields(tmp_path):
+    runner = CliRunner()
+    bcf_path = tmp_path / "main.bcf"
+    _write_minimal_bcf(bcf_path)
+
+    result = runner.invoke(
+        cli,
+        ["check-bcf", str(bcf_path), "--field", "note", "--field", "isbn"],
+    )
+    assert result.exit_code == 0
+    assert "Citekeys with order: 2" in result.output
+    assert "OK: note" in result.output
+    assert "OK: isbn" in result.output
+
+
+def test_cli_check_bcf_fails_for_missing_field(tmp_path):
+    runner = CliRunner()
+    bcf_path = tmp_path / "main.bcf"
+    _write_minimal_bcf(bcf_path)
+
+    result = runner.invoke(
+        cli,
+        ["check-bcf", str(bcf_path), "--field", "doi", "--field", "pubstate"],
+    )
+    assert result.exit_code != 0
+    assert "MISSING: doi" in result.output
+    assert "OK: pubstate" in result.output
