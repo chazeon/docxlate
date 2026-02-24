@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..figures import register as register_runtime
+from .runtime import register as register_runtime
 from .config import register_plugin
 
 
