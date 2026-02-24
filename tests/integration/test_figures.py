@@ -2,6 +2,7 @@ import base64
 from pathlib import Path
 
 from lxml import etree
+import pytest
 
 from docxlate.handlers import latex
 
@@ -238,3 +239,63 @@ def test_caption_template_keeps_caption_spacing_and_inline_formatting():
     assert para is not None
     assert "Alpha beta gamma delta" in para.text
     assert any(run.italic for run in para.runs if "gamma" in (run.text or ""))
+
+
+@pytest.mark.parametrize(
+    "place,has_caption,prefix,between,after",
+    [
+        ("r", True, "Intro before.", "", "Body after."),
+        ("l", True, "Intro before.", "\n\n", "Body after."),
+        ("r", False, "Intro before.", "", "Body after."),
+        ("l", False, "Intro before.", "\n", "Body after."),
+        ("r", True, "", "", "Body after at start."),
+    ],
+)
+def test_wrapfigure_anchor_paragraph_regression_matrix(
+    tmp_path,
+    place,
+    has_caption,
+    prefix,
+    between,
+    after,
+):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    caption_line = r"\caption{Wrapped Figure Caption}" if has_caption else ""
+    tex = (
+        (prefix + "\n\n") if prefix else ""
+    ) + rf"""\begin{{wrapfigure}}{{{place}}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+{caption_line}
+\end{{wrapfigure}}
+{between}{after}
+"""
+    latex.run(tex)
+
+    anchor_paragraphs = [p for p in latex.doc.paragraphs if "<wp:anchor" in p._element.xml]
+    assert anchor_paragraphs, "Expected at least one wrapped anchor paragraph"
+
+    body_idx = next((i for i, p in enumerate(latex.doc.paragraphs) if after in p.text), None)
+    assert body_idx is not None, "Expected trailing body paragraph text"
+    body_para = latex.doc.paragraphs[body_idx]
+    assert body_para.text.strip()
+
+    for ap in anchor_paragraphs:
+        assert ap.text.strip(), "Anchor paragraph should not be whitespace-only"
+        if place == "r":
+            assert "<wp:align>right</wp:align>" in ap._element.xml
+        else:
+            assert "<wp:align>left</wp:align>" in ap._element.xml
+
+    # No plain empty paragraph should be introduced between the anchor host
+    # and the following body paragraph.
+    for i, para in enumerate(latex.doc.paragraphs[:-1]):
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        nxt = latex.doc.paragraphs[i + 1]
+        assert nxt.text.strip(), "Unexpected blank paragraph after wrap anchor host"
