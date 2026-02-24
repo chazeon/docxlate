@@ -166,8 +166,7 @@ class DocxEmitterBackend:
         return next_anchor_group_id(doc)
 
     def _wrap_distances_emu(self) -> dict[str, int]:
-        def _emu(key: str, default_emu: int) -> int:
-            value = self.context.get(key)
+        def _to_emu(value, default_emu: int) -> int:
             if value is None:
                 return default_emu
             try:
@@ -178,16 +177,47 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
+        def _side_emu(
+            box_key: str,
+            side_key: str,
+            *,
+            legacy_key: str,
+            default_emu: int,
+        ) -> int:
+            box = self.context.get(box_key)
+            if isinstance(box, dict) and side_key in box:
+                return _to_emu(box.get(side_key), default_emu)
+            return _to_emu(self.context.get(legacy_key), default_emu)
+
         return {
-            "dist_t": _emu("wrapfigure_dist_top_in", 0),
-            "dist_b": _emu("wrapfigure_dist_bottom_in", 0),
-            "dist_l": _emu("wrapfigure_dist_left_in", 114300),
-            "dist_r": _emu("wrapfigure_dist_right_in", 114300),
+            "dist_t": _side_emu(
+                "wrap",
+                "top",
+                legacy_key="wrapfigure_dist_top_in",
+                default_emu=0,
+            ),
+            "dist_b": _side_emu(
+                "wrap",
+                "bottom",
+                legacy_key="wrapfigure_dist_bottom_in",
+                default_emu=0,
+            ),
+            "dist_l": _side_emu(
+                "wrap",
+                "left",
+                legacy_key="wrapfigure_dist_left_in",
+                default_emu=114300,
+            ),
+            "dist_r": _side_emu(
+                "wrap",
+                "right",
+                legacy_key="wrapfigure_dist_right_in",
+                default_emu=114300,
+            ),
         }
 
     def _textbox_insets_emu(self) -> dict[str, int]:
-        def _emu(key: str, default_emu: int) -> int:
-            value = self.context.get(key)
+        def _to_emu(value, default_emu: int) -> int:
             if value is None:
                 return default_emu
             try:
@@ -198,12 +228,44 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
+        def _side_emu(
+            box_key: str,
+            side_key: str,
+            *,
+            legacy_key: str,
+            default_emu: int,
+        ) -> int:
+            box = self.context.get(box_key)
+            if isinstance(box, dict) and side_key in box:
+                return _to_emu(box.get(side_key), default_emu)
+            return _to_emu(self.context.get(legacy_key), default_emu)
+
         # Keep conservative defaults; explicit config overrides.
         return {
-            "l_ins": _emu("wrapfigure_textbox_inset_left_in", 0),
-            "r_ins": _emu("wrapfigure_textbox_inset_right_in", 0),
-            "t_ins": _emu("wrapfigure_textbox_inset_top_in", 0),
-            "b_ins": _emu("wrapfigure_textbox_inset_bottom_in", 0),
+            "l_ins": _side_emu(
+                "inset",
+                "left",
+                legacy_key="wrapfigure_textbox_inset_left_in",
+                default_emu=0,
+            ),
+            "r_ins": _side_emu(
+                "inset",
+                "right",
+                legacy_key="wrapfigure_textbox_inset_right_in",
+                default_emu=0,
+            ),
+            "t_ins": _side_emu(
+                "inset",
+                "top",
+                legacy_key="wrapfigure_textbox_inset_top_in",
+                default_emu=0,
+            ),
+            "b_ins": _side_emu(
+                "inset",
+                "bottom",
+                legacy_key="wrapfigure_textbox_inset_bottom_in",
+                default_emu=0,
+            ),
         }
 
     def _emit_plain_span(self, paragraph, span: TextSpan):

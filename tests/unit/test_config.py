@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from docxlate.config import validate_runtime_config
+from docxlate.config import SideBox, validate_runtime_config
 
 
 def test_validate_runtime_config_accepts_known_fields():
@@ -17,14 +17,8 @@ def test_validate_runtime_config_accepts_known_fields():
         "parse_skip_packages": ["fontspec"],
         "parse_skip_usepackage_paths": ["styles/proposal-compact"],
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
-        "wrapfigure_dist_left_in": 0.2,
-        "wrapfigure_dist_right_in": 0.3,
-        "wrapfigure_dist_top_in": 0.05,
-        "wrapfigure_dist_bottom_in": 0.06,
-        "wrapfigure_textbox_inset_left_in": 0.01,
-        "wrapfigure_textbox_inset_right_in": 0.02,
-        "wrapfigure_textbox_inset_top_in": 0.03,
-        "wrapfigure_textbox_inset_bottom_in": 0.04,
+        "wrap": [0.05, 0.3, 0.06, 0.2],
+        "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
         "wrapfigure_caption_gap_in": 0.2,
     }
     validated = validate_runtime_config(data)
@@ -39,14 +33,14 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
     assert validated["mathml2omml_xsl_path"] == "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"
-    assert validated["wrapfigure_dist_left_in"] == 0.2
-    assert validated["wrapfigure_dist_right_in"] == 0.3
-    assert validated["wrapfigure_dist_top_in"] == 0.05
-    assert validated["wrapfigure_dist_bottom_in"] == 0.06
-    assert validated["wrapfigure_textbox_inset_left_in"] == 0.01
-    assert validated["wrapfigure_textbox_inset_right_in"] == 0.02
-    assert validated["wrapfigure_textbox_inset_top_in"] == 0.03
-    assert validated["wrapfigure_textbox_inset_bottom_in"] == 0.04
+    assert validated["wrap"]["left"] == 0.2
+    assert validated["wrap"]["right"] == 0.3
+    assert validated["wrap"]["top"] == 0.05
+    assert validated["wrap"]["bottom"] == 0.06
+    assert validated["inset"]["left"] == 0.01
+    assert validated["inset"]["right"] == 0.02
+    assert validated["inset"]["top"] == 0.03
+    assert validated["inset"]["bottom"] == 0.04
     assert validated["wrapfigure_caption_gap_in"] == 0.2
 
 
@@ -77,14 +71,71 @@ def test_validate_runtime_config_rejects_invalid_title_policy():
 
 def test_validate_runtime_config_rejects_negative_wrap_distances():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrapfigure_dist_left_in": -0.1})
+        validate_runtime_config({"wrap": -0.1})
 
 
 def test_validate_runtime_config_rejects_negative_textbox_insets():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrapfigure_textbox_inset_left_in": -0.1})
+        validate_runtime_config({"inset": -0.1})
 
 
 def test_validate_runtime_config_rejects_negative_caption_gap():
     with pytest.raises(ValidationError):
         validate_runtime_config({"wrapfigure_caption_gap_in": -0.1})
+
+
+def test_validate_runtime_config_accepts_wrap_scalar_shorthand():
+    validated = validate_runtime_config({"wrap": 0.2})
+    assert validated["wrap"]["top"] == 0.2
+    assert validated["wrap"]["right"] == 0.2
+    assert validated["wrap"]["bottom"] == 0.2
+    assert validated["wrap"]["left"] == 0.2
+
+
+def test_validate_runtime_config_accepts_wrap_list_shorthand():
+    validated = validate_runtime_config({"wrap": [0.1, 0.2, 0.3, 0.4]})
+    assert validated["wrap"]["top"] == 0.1
+    assert validated["wrap"]["right"] == 0.2
+    assert validated["wrap"]["bottom"] == 0.3
+    assert validated["wrap"]["left"] == 0.4
+
+
+def test_validate_runtime_config_accepts_wrap_mapping_shorthand():
+    validated = validate_runtime_config({"wrap": {"left": 0.2, "r": 0.3}})
+    assert validated["wrap"]["left"] == 0.2
+    assert validated["wrap"]["right"] == 0.3
+    assert "top" not in validated["wrap"]
+    assert "bottom" not in validated["wrap"]
+
+
+def test_validate_runtime_config_accepts_inset_shorthand():
+    validated = validate_runtime_config({"inset": {"t": 0.01, "b": 0.02}})
+    assert validated["inset"]["top"] == 0.01
+    assert validated["inset"]["bottom"] == 0.02
+    assert "left" not in validated["inset"]
+    assert "right" not in validated["inset"]
+
+
+def test_validate_runtime_config_rejects_legacy_flat_side_keys():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrapfigure_dist_left_in": 0.2})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrapfigure_textbox_inset_top_in": 0.1})
+
+
+def test_validate_runtime_config_rejects_invalid_shorthand_shapes():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrap": [0.1, 0.2]})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrap": {"x": 0.1}})
+
+
+def test_validate_runtime_config_rejects_negative_shorthand_values():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"inset": -0.1})
+
+
+def test_sidebox_list_and_mapping_inputs_are_equal():
+    from_list = SideBox.from_input([1, 1, 1, 1])
+    from_mapping = SideBox.from_input({"top": 1, "right": 1, "bottom": 1, "left": 1})
+    assert from_list == from_mapping
