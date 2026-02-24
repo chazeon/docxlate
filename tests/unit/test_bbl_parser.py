@@ -14,6 +14,8 @@ def test_parse_bbl_extracts_entries_and_fields():
     assert key_a["fields"]["pages"] == "10--20"
     assert key_a["fields"]["doi"] == "10.1000/example"
     assert key_a["authors"][:2] == ["Doe, Jane", "Roe, John"]
+    assert key_a["author_names"][0]["family"] == "Doe"
+    assert key_a["author_names"][0]["given"] == "Jane"
 
 
 def test_format_bibliography_entry_contains_core_parts():
@@ -72,6 +74,49 @@ def test_format_bibliography_entry_supports_custom_template():
         template=r"<< authors|join('; ') >> :: << fields.title >>",
     )
     assert formatted == "A, One :: My Title"
+
+
+def test_format_bibliography_entry_exposes_structured_author_names():
+    entry = {
+        "authors": ["Zhang, Zhen"],
+        "author_names": [
+            {
+                "family": "Zhang",
+                "familyi": r"Z\bibinitperiod",
+                "given": "Zhen",
+                "giveni": r"Z\bibinitperiod",
+            }
+        ],
+        "fields": {"title": "My Title"},
+    }
+    formatted = format_bibliography_entry(
+        entry,
+        template=r"<< author_names[0].family >>, << author_names[0].giveni >> :: << fields.title >>",
+    )
+    assert formatted == r"Zhang, Z\bibinitperiod :: My Title"
+
+
+def test_parse_bbl_exposes_all_author_name_parts(tmp_path):
+    bbl = tmp_path / "names.bbl"
+    bbl.write_text(
+        r"""
+\refsection{0}
+\entry{KeyN}{article}{}
+\name{author}{1}{}{%
+  {{hash=a}{family={Zhang},familyi={Z\bibinitperiod},given={Zhen},giveni={Z\bibinitperiod}}}%
+}
+\field{title}{Name Test}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+    entries = parse_bbl(bbl)
+    author = entries["KeyN"]["author_names"][0]
+    assert author["family"] == "Zhang"
+    assert author["familyi"] == r"Z\bibinitperiod"
+    assert author["given"] == "Zhen"
+    assert author["giveni"] == r"Z\bibinitperiod"
 
 
 def test_format_bibliography_entry_does_not_mutate_doi_hyphens():

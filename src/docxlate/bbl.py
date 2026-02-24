@@ -54,6 +54,7 @@ class BblEntry:
     raw_fields: dict[str, str] = dataclass_field(default_factory=dict)
     raw_lists: dict[str, list[str]] = dataclass_field(default_factory=dict)
     raw_authors: list[str] = dataclass_field(default_factory=list)
+    raw_author_names: list[dict[str, str]] = dataclass_field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -65,6 +66,10 @@ class BblEntry:
                 for k, values in self.raw_lists.items()
             },
             "authors": [_preserve_tex_text(a) for a in self.raw_authors],
+            "author_names": [
+                {k: str(v).strip() for k, v in author.items()}
+                for author in self.raw_author_names
+            ],
         }
 
 
@@ -163,18 +168,19 @@ def _fragment_raw_text(value) -> str:
     return str(value)
 
 
-def _extract_named_group_values(payload: str, key: str) -> list[str]:
-    values: list[str] = []
-    token = f"{key}={{"
+def _extract_all_named_group_values(payload: str) -> dict[str, list[str]]:
+    values: dict[str, list[str]] = {}
+    pattern = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=\{")
     i = 0
-    while True:
-        pos = payload.find(token, i)
-        if pos == -1:
+    while i < len(payload):
+        match = pattern.search(payload, i)
+        if match is None:
             break
-        start = pos + len(token) - 1
+        key = match.group(1)
+        start = match.end() - 1
         value, nxt = _read_braced(payload, start)
-        values.append(value)
-        i = nxt
+        values.setdefault(key, []).append(value)
+        i = max(i + 1, nxt)
     return values
 
 
@@ -245,9 +251,18 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
             payload = node.attributes.get("payload")
             payload_source = str(getattr(payload, "source", "") or "")
             if role == "author":
-                families = _extract_named_group_values(payload_source, "family")
-                givens = _extract_named_group_values(payload_source, "given")
-                for idx, family in enumerate(families):
+                all_fields = _extract_all_named_group_values(payload_source)
+                author_count = max((len(vals) for vals in all_fields.values()), default=0)
+                families = all_fields.get("family", [])
+                givens = all_fields.get("given", [])
+                for idx in range(author_count):
+                    author_parts: dict[str, str] = {}
+                    for key, vals in all_fields.items():
+                        if idx < len(vals):
+                            author_parts[key] = vals[idx]
+                    if author_parts:
+                        current.raw_author_names.append(author_parts)
+                    family = families[idx] if idx < len(families) else ""
                     given = givens[idx] if idx < len(givens) else ""
                     author = f"{family}, {given}".strip().strip(",")
                     if author:
@@ -331,12 +346,16 @@ def format_bibliography_entry(
 ) -> str:
     fields = entry_data.get("fields", {})
     authors = [a for a in entry_data.get("authors", []) if a]
+    author_names = [
+        a for a in entry_data.get("author_names", []) if isinstance(a, dict) and a
+    ]
     env = _bibliography_template_env()
     compiled = env.from_string(template or DEFAULT_BIB_TEMPLATE)
     if et_al_limit <= 0:
         et_al_limit = 3
     rendered = compiled.render(
         authors=authors,
+        author_names=author_names,
         fields=fields,
         et_al_limit=et_al_limit,
     )
