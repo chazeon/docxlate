@@ -294,6 +294,11 @@ class LatexBridge:
                 self._append_node_text(node, active_ctx)
                 continue
 
+            raw_name = getattr(node, "nodeName", None)
+            if raw_name is not None and str(raw_name) == "\\":
+                self._emit_line_break()
+                continue
+
             name = self._node_name(node)
             special_text = self._special_text_for_node(name)
             if special_text is not None:
@@ -432,6 +437,7 @@ class LatexBridge:
             "&": "&",
             "{": "{",
             "}": "}",
+            "textbackslash": "\\",
         }
         if node_name in literal_map:
             return literal_map[node_name]
@@ -719,3 +725,10 @@ class LatexBridge:
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
         )
+
+    def _emit_line_break(self):
+        self._ensure_paragraph()
+        paragraph = self._active_paragraph()
+        if paragraph is None:
+            return
+        self.emitter.emit_line_break(paragraph)

@@ -78,6 +78,12 @@ def test_escaped_special_characters_render_as_literals():
     assert "{x}" in text
 
 
+def test_textbackslash_renders_literal_backslash():
+    _reset_router()
+    latex.run(r"Path: C:\textbackslash{}Users\textbackslash{}name")
+    assert latex.doc.paragraphs[0].text == r"Path: C:\Users\name"
+
+
 def test_double_backslash_percent_keeps_tex_behavior():
     _reset_router()
     latex.run(r"Prefix\\%comment")
@@ -96,8 +102,8 @@ def test_double_backslash_linebreak_keeps_neighboring_text():
     _reset_router()
     latex.run(r"A\\B")
     text = latex.doc.paragraphs[0].text
-    assert "A" in text
-    assert "B" in text
+    assert text == "A\nB"
+    assert "<w:br" in latex.doc.paragraphs[0]._element.xml
 
 
 def test_texttt_emits_monospace_runs():

@@ -61,6 +61,9 @@ class DocxEmitterBackend:
             return
         self._emit_linked_span(paragraph, span, self._active_link)
 
+    def emit_line_break(self, paragraph):
+        paragraph.add_run().add_break()
+
     def emit_equation(self, paragraph, spec: EquationSpec):
         xsl_path = self.context.get("mathml2omml_xsl_path")
         ok = inject_omml(
