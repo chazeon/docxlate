@@ -84,6 +84,12 @@ def test_textbackslash_renders_literal_backslash():
     assert latex.doc.paragraphs[0].text == r"Path: C:\Users\name"
 
 
+def test_textasciitilde_renders_literal_tilde():
+    _reset_router()
+    latex.run(r"A\textasciitilde{}B")
+    assert latex.doc.paragraphs[0].text == "A~B"
+
+
 def test_double_backslash_percent_keeps_tex_behavior():
     _reset_router()
     latex.run(r"Prefix\\%comment")

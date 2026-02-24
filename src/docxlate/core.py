@@ -448,6 +448,7 @@ class LatexBridge:
             "&": "&",
             "{": "{",
             "}": "}",
+            "textasciitilde": "~",
             "textbackslash": "\\",
             "textquotedblleft": "“",
             "textquotedblright": "”",
