@@ -19,6 +19,10 @@ class RuntimeConfig(BaseModel):
     parse_skip_packages: list[str] | None = None
     parse_skip_usepackage_paths: list[str] | None = None
     mathml2omml_xsl_path: str | None = None
+    wrapfigure_dist_left_in: float | None = Field(default=None, ge=0)
+    wrapfigure_dist_right_in: float | None = Field(default=None, ge=0)
+    wrapfigure_dist_top_in: float | None = Field(default=None, ge=0)
+    wrapfigure_dist_bottom_in: float | None = Field(default=None, ge=0)
 
 
 def validate_runtime_config(data: dict) -> dict:

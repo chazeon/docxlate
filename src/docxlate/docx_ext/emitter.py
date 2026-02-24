@@ -2,6 +2,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from docx.oxml.ns import qn
+from docx.shared import Inches
 from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
 from .floating import (
@@ -101,6 +102,7 @@ class DocxEmitterBackend:
             drawing,
             place=place,
             pos_y_emu=pos_y_emu,
+            wrap_distances_emu=self._wrap_distances_emu(),
         )
 
     def emit_wrapped_caption_anchor(
@@ -122,7 +124,28 @@ class DocxEmitterBackend:
             pos_y_emu=pos_y_emu,
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
+            wrap_distances_emu=self._wrap_distances_emu(),
         )
+
+    def _wrap_distances_emu(self) -> dict[str, int]:
+        def _emu(key: str, default_emu: int) -> int:
+            value = self.context.get(key)
+            if value is None:
+                return default_emu
+            try:
+                inches = float(value)
+            except (TypeError, ValueError):
+                return default_emu
+            if inches < 0:
+                return default_emu
+            return int(Inches(inches))
+
+        return {
+            "dist_t": _emu("wrapfigure_dist_top_in", 0),
+            "dist_b": _emu("wrapfigure_dist_bottom_in", 0),
+            "dist_l": _emu("wrapfigure_dist_left_in", 114300),
+            "dist_r": _emu("wrapfigure_dist_right_in", 114300),
+        }
 
     def _emit_plain_span(self, paragraph, span: TextSpan):
         run = paragraph.add_run(span.text)

@@ -21,14 +21,27 @@ def _next_docpr_id(doc) -> int:
     return max(ids, default=0) + 1
 
 
-def _build_common_anchor(*, place: str | None, pos_y_emu: int, cx_emu: int, cy_emu: int):
+def _build_common_anchor(
+    *,
+    place: str | None,
+    pos_y_emu: int,
+    cx_emu: int,
+    cy_emu: int,
+    wrap_distances_emu: dict[str, int] | None = None,
+):
     align = "right" if "r" in (place or "").lower() else "left"
+    distances = wrap_distances_emu or {
+        "dist_t": 0,
+        "dist_b": 0,
+        "dist_l": 114300,
+        "dist_r": 114300,
+    }
 
     anchor = OxmlElement("wp:anchor")
-    anchor.set("distT", "0")
-    anchor.set("distB", "0")
-    anchor.set("distL", "114300")
-    anchor.set("distR", "114300")
+    anchor.set("distT", str(max(0, int(distances.get("dist_t", 0)))))
+    anchor.set("distB", str(max(0, int(distances.get("dist_b", 0)))))
+    anchor.set("distL", str(max(0, int(distances.get("dist_l", 114300)))))
+    anchor.set("distR", str(max(0, int(distances.get("dist_r", 114300)))))
     anchor.set("simplePos", "0")
     anchor.set("relativeHeight", "251661312")
     anchor.set("behindDoc", "0")
@@ -70,10 +83,10 @@ def _build_common_anchor(*, place: str | None, pos_y_emu: int, cx_emu: int, cy_e
 
     wrap_square = OxmlElement("wp:wrapSquare")
     wrap_square.set("wrapText", "bothSides")
-    wrap_square.set("distT", "0")
-    wrap_square.set("distB", "0")
-    wrap_square.set("distL", "114300")
-    wrap_square.set("distR", "114300")
+    wrap_square.set("distT", str(max(0, int(distances.get("dist_t", 0)))))
+    wrap_square.set("distB", str(max(0, int(distances.get("dist_b", 0)))))
+    wrap_square.set("distL", str(max(0, int(distances.get("dist_l", 114300)))))
+    wrap_square.set("distR", str(max(0, int(distances.get("dist_r", 114300)))))
     anchor.append(wrap_square)
     return anchor
 
@@ -83,6 +96,7 @@ def convert_inline_drawing_to_wrapped_anchor(
     *,
     place: str | None,
     pos_y_emu: int = 0,
+    wrap_distances_emu: dict[str, int] | None = None,
 ):
     inline = drawing_elm.find(qn("wp:inline"))
     if inline is None:
@@ -91,7 +105,13 @@ def convert_inline_drawing_to_wrapped_anchor(
     extent = inline.find(qn("wp:extent"))
     cx = int(extent.get("cx", "1")) if extent is not None else 1
     cy = int(extent.get("cy", "1")) if extent is not None else 1
-    anchor = _build_common_anchor(place=place, pos_y_emu=pos_y_emu, cx_emu=cx, cy_emu=cy)
+    anchor = _build_common_anchor(
+        place=place,
+        pos_y_emu=pos_y_emu,
+        cx_emu=cx,
+        cy_emu=cy,
+        wrap_distances_emu=wrap_distances_emu,
+    )
 
     doc_pr = inline.find(qn("wp:docPr"))
     if doc_pr is not None:
@@ -117,12 +137,14 @@ def insert_wrapped_caption_anchor(
     pos_y_emu: int,
     box_cx_emu: int,
     box_cy_emu: int,
+    wrap_distances_emu: dict[str, int] | None = None,
 ):
     anchor = _build_common_anchor(
         place=place,
         pos_y_emu=pos_y_emu,
         cx_emu=box_cx_emu,
         cy_emu=box_cy_emu,
+        wrap_distances_emu=wrap_distances_emu,
     )
 
     doc_pr = OxmlElement("wp:docPr")

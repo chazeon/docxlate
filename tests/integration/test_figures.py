@@ -141,6 +141,48 @@ def test_wrapfigure_width_tracks_textwidth_fraction(tmp_path):
     assert abs(cx - expected) <= int(0.05 * textwidth)
 
 
+def test_wrapfigure_distances_are_configurable(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["wrapfigure_dist_left_in"] = 0.2
+    latex.context["wrapfigure_dist_right_in"] = 0.3
+    latex.context["wrapfigure_dist_top_in"] = 0.05
+    latex.context["wrapfigure_dist_bottom_in"] = 0.06
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    image_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "<wp:anchor" in p._element.xml and ("<pic:pic" in p._element.xml or "<a:blip" in p._element.xml)
+    )
+    root = etree.fromstring(image_para._element.xml.encode("utf-8"))
+    ns = {
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+    }
+    anchor = root.xpath(".//wp:anchor", namespaces=ns)[0]
+    wrap = root.xpath(".//wp:wrapSquare", namespaces=ns)[0]
+    expected = {
+        "distL": str(int(0.2 * 914400)),
+        "distR": str(int(0.3 * 914400)),
+        "distT": str(int(0.05 * 914400)),
+        "distB": str(int(0.06 * 914400)),
+    }
+    for key, value in expected.items():
+        assert anchor.get(key) == value
+        assert wrap.get(key) == value
+
+
 def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)

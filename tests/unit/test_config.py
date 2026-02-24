@@ -17,6 +17,10 @@ def test_validate_runtime_config_accepts_known_fields():
         "parse_skip_packages": ["fontspec"],
         "parse_skip_usepackage_paths": ["styles/proposal-compact"],
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
+        "wrapfigure_dist_left_in": 0.2,
+        "wrapfigure_dist_right_in": 0.3,
+        "wrapfigure_dist_top_in": 0.05,
+        "wrapfigure_dist_bottom_in": 0.06,
     }
     validated = validate_runtime_config(data)
     assert validated["bibliography_template"] == "<< fields.title >>"
@@ -30,6 +34,10 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
     assert validated["mathml2omml_xsl_path"] == "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"
+    assert validated["wrapfigure_dist_left_in"] == 0.2
+    assert validated["wrapfigure_dist_right_in"] == 0.3
+    assert validated["wrapfigure_dist_top_in"] == 0.05
+    assert validated["wrapfigure_dist_bottom_in"] == 0.06
 
 
 def test_validate_runtime_config_rejects_unknown_fields():
@@ -55,3 +63,8 @@ def test_validate_runtime_config_rejects_small_citation_min_run():
 def test_validate_runtime_config_rejects_invalid_title_policy():
     with pytest.raises(ValidationError):
         validate_runtime_config({"title_render_policy": "sometimes"})
+
+
+def test_validate_runtime_config_rejects_negative_wrap_distances():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrapfigure_dist_left_in": -0.1})
