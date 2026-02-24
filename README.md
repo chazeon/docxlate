@@ -35,27 +35,47 @@ uv sync
 
 ## CLI
 
-Basic:
+Main command:
 
 ```bash
-docxlate input.tex -o output.docx
+docxlate convert input.tex -o output.docx
 ```
 
 Use an existing DOCX template:
 
 ```bash
-docxlate input.tex -o output.docx --template template.docx
+docxlate convert input.tex -o output.docx --template template.docx
+```
+
+Apply ordered template overrides (later `-t` values override earlier ones):
+
+```bash
+docxlate convert input.tex -o output.docx -t base.docx -t styles.xml -t theme1.xml
 ```
 
 Load runtime config from YAML:
 
 ```bash
-docxlate input.tex -o output.docx --config config.yaml
+docxlate convert input.tex -o output.docx --config config.yaml
 ```
 
-If `--config` is omitted, `docxlate.yaml` in the current directory is auto-loaded when present.
+Legacy one-off styles override (kept for compatibility with older workflows):
 
-Legacy CLI alias `docxlate` is still available for compatibility.
+```bash
+docxlate convert input.tex -o output.docx --styles-xml styles.xml
+```
+
+Dump DOCX style/layout parts:
+
+```bash
+docxlate dump-styles output.docx -o styles.xml
+docxlate dump-theme output.docx -o theme1.xml
+docxlate dump-font-table output.docx -o fontTable.xml
+```
+
+Dumped XML files are auto-formatted for readability.
+
+If `--config` is omitted, `docxlate.yaml` in the current directory is auto-loaded when present.
 
 ## Library Usage
 
@@ -78,6 +98,7 @@ latex.save("output.docx")
 Validated with Pydantic (`extra=forbid`). Current keys:
 
 - `bibliography_template`
+- `figure_caption_template`
 - `bibliography_numbering`: `bracket` | `none`
 - `bibliography_indent_in`: float (`> 0`)
 - `bibliography_et_al_limit`: int (`> 0`)
@@ -98,6 +119,7 @@ parse_skip_packages:
   - fontspec
   - expl3
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
+figure_caption_template: "\\textbf{<< fig_name >>. << fig_num >>} << caption >>"
 ```
 
 ## Math Conversion

@@ -112,6 +112,7 @@ def insert_wrapped_caption_anchor(
     doc,
     *,
     source_paragraph,
+    anchor_paragraph=None,
     place: str | None,
     pos_y_emu: int,
     box_cx_emu: int,
@@ -174,7 +175,15 @@ def insert_wrapped_caption_anchor(
     txbx_content.append(deepcopy(source_paragraph._p))
     wsp.append(OxmlElement("wps:bodyPr"))
 
-    anchor_para = doc.add_paragraph()
+    anchor_para = anchor_paragraph
+    if anchor_para is None:
+        anchor_para = doc.add_paragraph()
+        try:
+            anchor_para.style = source_paragraph.style
+        except Exception:
+            pass
+        anchor_para.paragraph_format.space_before = 0
+        anchor_para.paragraph_format.space_after = 0
     run = anchor_para.add_run()
     drawing = OxmlElement("w:drawing")
     drawing.append(anchor)

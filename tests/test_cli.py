@@ -1,8 +1,10 @@
 from pathlib import Path
 from docx import Document
 from click.testing import CliRunner
+from zipfile import ZipFile
+from lxml import etree
 
-from docxlate.cli import main
+from docxlate.cli import cli
 from docxlate.handlers import latex
 
 
@@ -33,8 +35,8 @@ def test_cli_uses_template_docx(tmp_path):
 
     out_path = tmp_path / "output.docx"
     result = runner.invoke(
-        main,
-        [str(tex_path), "-o", str(out_path), "--template", str(template_path)],
+        cli,
+        ["convert", str(tex_path), "-o", str(out_path), "--template", str(template_path)],
     )
 
     assert result.exit_code == 0
@@ -67,8 +69,8 @@ def test_cli_loads_yaml_config_for_bibliography_template(tmp_path):
 
     out_path = tmp_path / "output.docx"
     result = runner.invoke(
-        main,
-        [str(tex_path), "-o", str(out_path), "--config", str(config_path)],
+        cli,
+        ["convert", str(tex_path), "-o", str(out_path), "--config", str(config_path)],
     )
 
     assert result.exit_code == 0
@@ -86,9 +88,171 @@ def test_cli_rejects_invalid_yaml_config(tmp_path):
     config_path.write_text("unknown_option: true\n", encoding="utf-8")
 
     result = runner.invoke(
-        main,
-        [str(tex_path), "--config", str(config_path)],
+        cli,
+        ["convert", str(tex_path), "--config", str(config_path)],
     )
 
     assert result.exit_code != 0
     assert "Invalid config" in result.output
+
+
+def _extract_styles_xml(docx_path: Path, out_path: Path):
+    with ZipFile(docx_path, "r") as zf:
+        out_path.write_bytes(zf.read("word/styles.xml"))
+
+
+def _style_based_on(styles_xml_path: Path, style_id: str) -> str | None:
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    root = etree.fromstring(styles_xml_path.read_bytes())
+    nodes = root.xpath(f"//w:style[@w:styleId='{style_id}']", namespaces=ns)
+    if not nodes:
+        return None
+    value = nodes[0].xpath("string(w:basedOn/@w:val)", namespaces=ns)
+    return value or None
+
+
+def _set_style_based_on(styles_xml_path: Path, style_id: str, based_on: str):
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    root = etree.fromstring(styles_xml_path.read_bytes())
+    nodes = root.xpath(f"//w:style[@w:styleId='{style_id}']", namespaces=ns)
+    if not nodes:
+        return
+    node = nodes[0]
+    based_nodes = node.xpath("w:basedOn", namespaces=ns)
+    if based_nodes:
+        based_nodes[0].set(f"{{{ns['w']}}}val", based_on)
+    else:
+        based = etree.Element(f"{{{ns['w']}}}basedOn")
+        based.set(f"{{{ns['w']}}}val", based_on)
+        node.insert(1, based)
+    styles_xml_path.write_bytes(
+        etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone="yes")
+    )
+
+
+def test_cli_dump_styles_writes_styles_xml(tmp_path):
+    runner = CliRunner()
+    source_docx = tmp_path / "source.docx"
+    Document().save(source_docx)
+    dumped = tmp_path / "styles.xml"
+    result = runner.invoke(
+        cli,
+        ["dump-styles", str(source_docx), "-o", str(dumped)],
+    )
+    assert result.exit_code == 0
+    assert dumped.exists()
+    text = dumped.read_text(encoding="utf-8")
+    assert text.startswith("<?xml")
+    root = etree.fromstring(text.encode("utf-8"))
+    assert etree.QName(root).localname == "styles"
+    assert "\n  <" in text
+
+
+def test_cli_dump_theme_writes_theme_xml(tmp_path):
+    runner = CliRunner()
+    source_docx = tmp_path / "source.docx"
+    Document().save(source_docx)
+    dumped = tmp_path / "theme1.xml"
+    result = runner.invoke(
+        cli,
+        ["dump-theme", str(source_docx), "-o", str(dumped)],
+    )
+    assert result.exit_code == 0
+    assert dumped.exists()
+    text = dumped.read_text(encoding="utf-8")
+    root = etree.fromstring(text.encode("utf-8"))
+    assert etree.QName(root).localname == "theme"
+
+
+def test_cli_dump_font_table_writes_xml(tmp_path):
+    runner = CliRunner()
+    source_docx = tmp_path / "source.docx"
+    Document().save(source_docx)
+    dumped = tmp_path / "fontTable.xml"
+    result = runner.invoke(
+        cli,
+        ["dump-font-table", str(source_docx), "-o", str(dumped)],
+    )
+    assert result.exit_code == 0
+    assert dumped.exists()
+    text = dumped.read_text(encoding="utf-8")
+    root = etree.fromstring(text.encode("utf-8"))
+    assert etree.QName(root).localname == "fonts"
+
+
+def test_cli_injects_styles_xml(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\href{https://example.com}{x}")
+
+    base_docx = tmp_path / "base.docx"
+    Document().save(base_docx)
+    styles_xml = tmp_path / "styles.xml"
+    _extract_styles_xml(base_docx, styles_xml)
+    _set_style_based_on(styles_xml, "Caption", "Heading1")
+
+    out_docx = tmp_path / "out.docx"
+    result = runner.invoke(
+        cli,
+        ["convert", str(tex_path), "-o", str(out_docx), "--styles-xml", str(styles_xml)],
+    )
+    assert result.exit_code == 0
+
+    extracted = tmp_path / "out_styles.xml"
+    _extract_styles_xml(out_docx, extracted)
+    assert _style_based_on(extracted, "Caption") == "Heading1"
+
+
+def test_cli_template_accepts_styles_xml_shorthand(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("Hello")
+
+    base_docx = tmp_path / "base.docx"
+    Document().save(base_docx)
+    styles_xml = tmp_path / "styles.xml"
+    _extract_styles_xml(base_docx, styles_xml)
+    _set_style_based_on(styles_xml, "Caption", "Heading1")
+
+    out_docx = tmp_path / "out.docx"
+    result = runner.invoke(
+        cli,
+        ["convert", str(tex_path), "-o", str(out_docx), "--template", str(styles_xml)],
+    )
+    assert result.exit_code == 0
+
+    extracted = tmp_path / "out_styles.xml"
+    _extract_styles_xml(out_docx, extracted)
+    assert _style_based_on(extracted, "Caption") == "Heading1"
+
+
+def test_cli_template_chain_applies_docx_then_xml_override(tmp_path):
+    runner = CliRunner()
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("Hello")
+
+    template_docx = tmp_path / "template.docx"
+    Document().save(template_docx)
+    styles_xml = tmp_path / "styles.xml"
+    _extract_styles_xml(template_docx, styles_xml)
+    _set_style_based_on(styles_xml, "Caption", "Heading1")
+
+    out_docx = tmp_path / "out.docx"
+    result = runner.invoke(
+        cli,
+        [
+            "convert",
+            str(tex_path),
+            "-o",
+            str(out_docx),
+            "-t",
+            str(template_docx),
+            "-t",
+            str(styles_xml),
+        ],
+    )
+    assert result.exit_code == 0
+
+    extracted = tmp_path / "out_styles.xml"
+    _extract_styles_xml(out_docx, extracted)
+    assert _style_based_on(extracted, "Caption") == "Heading1"

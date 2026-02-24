@@ -8,6 +8,7 @@ from .extensions import (
     register_hyperref_extension,
     register_lists_extension,
 )
+from .model import RenderContext
 from pathlib import Path
 from docx.shared import Pt, Inches
 import re
@@ -24,7 +25,19 @@ class And(Command):
     args = ""
 
 
+class Color(Command):
+    macroName = "color"
+    args = "color:str"
+
+
+class Needspace(Command):
+    macroName = "Needspace"
+    args = "len:str"
+
+
 latex.macro("and", And)
+latex.macro("color", Color)
+latex.macro("Needspace", Needspace)
 
 
 def _bibliography_layout_settings() -> dict:
@@ -338,6 +351,22 @@ def handle_maketitle(_node):
     _emit_front_matter(prepend=False)
 
 
+@latex.command("noindent", inline=True)
+def handle_noindent(_node):
+    latex.request_noindent()
+
+
+@latex.command("indent", inline=True)
+def handle_indent(_node):
+    latex.request_indent()
+
+
+@latex.command("Needspace", inline=True)
+def handle_needspace(_node):
+    # Layout hint for TeX pagination; no-op for DOCX output.
+    return
+
+
 @latex.command("paragraph", inline=True)
 def handle_paragraph(node):
     """Render LaTeX \\paragraph as a run-in heading."""
@@ -362,39 +391,43 @@ def handle_paragraph(node):
             title = latex.get_arg_text(node, 0, key="title")
             latex.append_inline(title, style={"bold": True, "theme": "major"})
         latex.append_inline(" ", style={"bold": True, "theme": "major"})
+        # The paragraph body frequently begins with a whitespace text node
+        # due to source line breaks; consume one to avoid double spaces.
+        latex.context["_trim_next_leading_space_once"] = True
         latex.context["_preserve_paragraph_once"] = True
         latex.render_nodes(node.childNodes)
 
 
 @latex.env("equation")
 def handle_math(node):
-    p = latex.doc.add_paragraph()
     source = latex.get_math_source(node)
     resolver = getattr(latex, "reference_resolver", None)
     refs = latex.context.get("refs", {})
-    for label_name in re.findall(r"\\label\{([^}]+)\}", source):
-        if resolver is not None:
-            current_paragraph = latex._current_paragraph
-            latex._current_paragraph = p
-            ref_info = refs.get(label_name, {})
-            ref_text = ref_info.get("ref_num")
-            resolver.register_label(
-                latex,
-                label_name,
-                ref_text=str(ref_text) if ref_text is not None else None,
-            )
-            latex._current_paragraph = current_paragraph
+    labels = re.findall(r"\\label\{([^}]+)\}", source)
+    resolved_number: str | None = None
+    for label_name in labels:
+        ref_info = refs.get(label_name, {})
+        ref_text = ref_info.get("ref_num")
+        if resolved_number is None and ref_text is not None:
+            resolved_number = str(ref_text)
     source = re.sub(r"\\label\{[^}]+\}", "", source).strip()
-    xsl_path = latex.context.get("mathml2omml_xsl_path")
-    ok = inject_omml(p, source, xsl_path=xsl_path)
-    if not ok and not xsl_path:
-        msg = (
-            "Math OMML stylesheet path is not configured "
-            "(set mathml2omml_xsl_path in config)."
-        )
-        warnings = latex.context.setdefault("warnings", [])
-        if msg not in warnings:
-            warnings.append(msg)
+    equation_ctx = latex.get_active_render_context().with_para_role("equation")
+    with latex.render_frame(style=equation_ctx):
+        p = latex.emit_equation(source, number=resolved_number)
+    if resolver is not None:
+        current_paragraph = latex._current_paragraph
+        latex._current_paragraph = p
+        try:
+            for label_name in labels:
+                ref_info = refs.get(label_name, {})
+                ref_text = ref_info.get("ref_num")
+                resolver.register_label(
+                    latex,
+                    label_name,
+                    ref_text=str(ref_text) if ref_text is not None else None,
+                )
+        finally:
+            latex._current_paragraph = current_paragraph
 
 
 @latex.command("cite", inline=True)

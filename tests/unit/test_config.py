@@ -7,6 +7,7 @@ from docxlate.config import validate_runtime_config
 def test_validate_runtime_config_accepts_known_fields():
     data = {
         "bibliography_template": "<< fields.title >>",
+        "figure_caption_template": r"\textbf{Figure. << x >>} << caption >>",
         "bibliography_numbering": "none",
         "bibliography_indent_in": 0.4,
         "bibliography_et_al_limit": 2,
@@ -19,6 +20,7 @@ def test_validate_runtime_config_accepts_known_fields():
     }
     validated = validate_runtime_config(data)
     assert validated["bibliography_template"] == "<< fields.title >>"
+    assert validated["figure_caption_template"] == r"\textbf{Figure. << x >>} << caption >>"
     assert validated["bibliography_numbering"] == "none"
     assert validated["bibliography_indent_in"] == 0.4
     assert validated["bibliography_et_al_limit"] == 2

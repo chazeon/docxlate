@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from lxml import etree
 
 from docxlate.handlers import latex
 
@@ -52,7 +53,75 @@ def test_equation_block_math_injected_or_fallback():
     latex.run(r"\begin{equation}E=mc^2\end{equation}")
 
     para_xml = latex.doc.paragraphs[0]._element.xml
-    assert "<m:oMath" in para_xml or "<math" in latex.doc.paragraphs[0].text
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    assert "<m:oMathPara" in para_xml
+
+
+def test_equation_with_labeled_aux_number_is_emitted():
+    latex.context["refs"] = {"eq:emc": {"ref_num": "1.2"}}
+    latex.run(r"\begin{equation}E=mc^2\label{eq:emc}\end{equation}")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "(1.2)" in text
+
+
+def test_equation_without_labeled_aux_number_has_no_emitted_number():
+    latex.context["refs"] = {}
+    latex.run(r"\begin{equation}E=mc^2\label{eq:missing}\end{equation}")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "(1.2)" not in text
+
+
+def test_equation_para_role_uses_style_table_and_preserves_first_body_role():
+    original = dict(latex.style_table)
+    latex.style_table.update(
+        {
+            "equation": ["Heading 3"],
+            "first_body": ["Heading 1"],
+            "body": ["Heading 2"],
+        }
+    )
+    try:
+        latex.run(r"\begin{equation}E=mc^2\end{equation} Body text.")
+    finally:
+        latex.style_table = original
+
+    paragraphs = latex.doc.paragraphs
+    assert len(paragraphs) >= 2
+    body_para = next((p for p in paragraphs if "Body text." in p.text), None)
+    assert body_para is not None
+    assert paragraphs[0].style.name == "Heading 3"
+    assert body_para.style.name == "Heading 1"
+
+
+def test_equation_in_color_scope_keeps_equation_rendered():
+    latex.run(r"{\color{blue}\begin{equation}E=mc^2\end{equation}}")
+    para = latex.doc.paragraphs[0]
+    assert "<m:oMath" in para._element.xml or "<math" in para.text
+
+
+def test_equation_nary_operator_receives_scoped_color():
+    latex.run(r"{\color{red}\begin{equation}\int_0^1 f(x)\,dx = 1\end{equation}}")
+    para_xml = latex.doc.paragraphs[0]._element.xml
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    assert "<m:naryPr>" in para_xml
+    assert "<m:ctrlPr>" in para_xml
+    assert 'w:color w:val="FF0000"' in para_xml
+
+
+def test_math_runs_do_not_emit_duplicate_run_property_branches():
+    latex.run(r"{\color{red}$\mathrm{GPa}$ and $x$}")
+    para_xml = latex.doc.paragraphs[0]._element.xml
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    root = etree.fromstring(para_xml.encode("utf-8"))
+    ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+    for run in root.xpath(".//m:r", namespaces=ns):
+        child_names = [etree.QName(child).localname for child in run]
+        assert child_names.count("rPr") <= 1
 
 
 def test_section_body_text_is_rendered_with_plastex():
@@ -195,6 +264,55 @@ def test_paragraph_heading_does_not_force_trailing_dot():
     normalized = " ".join(para.text.split())
     assert "Overview Body." in normalized
     assert "Overview. Body." not in para.text
+
+
+def test_paragraph_heading_does_not_double_space_before_body():
+    latex.run("\\paragraph{Cai-Zhuang Wang}\n (Ames Laboratory) is here.")
+    para = next((p for p in latex.doc.paragraphs if p.text.strip()), None)
+    assert para is not None
+    assert "Cai-Zhuang Wang  (Ames Laboratory)" not in para.text
+    assert "Cai-Zhuang Wang (Ames Laboratory)" in para.text
+
+
+def test_noindent_sets_first_line_indent_on_current_paragraph():
+    latex.run(r"\noindent First line.")
+    para = next((p for p in latex.doc.paragraphs if "First line." in p.text), None)
+    assert para is not None
+    assert 'w:firstLine="0"' in para._element.xml
+
+
+def test_noindent_applies_once_then_resets():
+    latex.run(r"\noindent First.\par Second.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    assert len(nonempty) >= 2
+    assert 'w:firstLine="0"' in nonempty[0]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[1]._element.xml
+
+
+def test_indent_overrides_pending_noindent_before_text():
+    latex.run(r"\noindent \indent First line.")
+    para = next((p for p in latex.doc.paragraphs if "First line." in p.text), None)
+    assert para is not None
+    assert 'w:firstLine="0"' not in para._element.xml
+
+
+def test_indent_applies_to_next_paragraph_only():
+    latex.run(r"\noindent First.\par \indent Second.\par Third.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    assert len(nonempty) >= 3
+    assert 'w:firstLine="0"' in nonempty[0]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[1]._element.xml
+    assert 'w:firstLine="0"' not in nonempty[2]._element.xml
+
+
+def test_needspace_command_does_not_emit_numeric_artifacts():
+    latex.run(r"Alpha.\par \Needspace{16\baselineskip}Beta.")
+    nonempty = [p for p in latex.doc.paragraphs if p.text.strip()]
+    text = "\n".join(p.text.strip() for p in nonempty)
+    assert "Alpha." in text
+    assert "Beta." in text
+    assert "\n16\n" not in f"\n{text}\n"
+    assert not any(p.text.strip() == "16" for p in nonempty)
 
 
 @pytest.mark.parametrize(

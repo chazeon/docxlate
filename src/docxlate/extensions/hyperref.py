@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -114,19 +115,26 @@ class ReferenceResolver:
             latex.append_inline(text)
             return
 
-        base_style = dict(latex._active_frame_value("style") or {})
-        with latex.render_frame(link={"anchor": anchor_name}, style=base_style):
-            latex.append_inline(text, style=base_style)
+        base_context = latex.get_active_render_context()
+        with latex.render_frame(link={"anchor": anchor_name}, style=base_context):
+            latex.append_inline(text)
 
     def append_external_link(self, latex, url: str, text: str):
         self._ensure_state()
         paragraph = self._ensure_paragraph(latex)
         if paragraph is None:
             return
+        normalized = _normalize_external_url(url)
+        if normalized is None:
+            latex.context.setdefault("warnings", []).append(
+                f"Skipped invalid hyperlink target: {url!r}"
+            )
+            latex.append_inline(text)
+            return
 
-        base_style = dict(latex._active_frame_value("style") or {})
-        with latex.render_frame(link={"url": url}, style=base_style):
-            latex.append_inline(text, style=base_style)
+        base_context = latex.get_active_render_context()
+        with latex.render_frame(link={"url": normalized}, style=base_context):
+            latex.append_inline(text)
 
 
 def register(latex):
@@ -164,13 +172,14 @@ def register(latex):
     @latex.command("href", inline=True)
     def handle_href(node):
         url = latex.get_arg_text(node, 0, key="url")
+        normalized_url = _normalize_external_url(url)
         text_fragment = getattr(node, "attributes", {}).get("self")
-        base_style = dict(latex._active_frame_value("style") or {})
-        if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-            with latex.render_frame(link={"url": url}, style=base_style):
-                latex.render_nodes(text_fragment.childNodes, style=base_style)
+        base_context = latex.get_active_render_context()
+        if normalized_url is not None and text_fragment is not None and getattr(text_fragment, "childNodes", None):
+            with latex.render_frame(link={"url": normalized_url}, style=base_context):
+                latex.render_nodes(text_fragment.childNodes, style=base_context)
             return
-        text = latex.get_arg_text(node, 1, key="self") or url
+        text = latex.get_arg_text(node, 1, key="self") or (normalized_url or url)
         resolver.append_external_link(latex, url, text)
 
     @latex.command("hyperref", inline=True)
@@ -178,10 +187,10 @@ def register(latex):
         label_name = latex.get_arg_text(node, 0, key="label")
         anchor_name = resolver.anchor_name(label_name)
         text_fragment = getattr(node, "attributes", {}).get("self")
-        base_style = dict(latex._active_frame_value("style") or {})
+        base_context = latex.get_active_render_context()
         if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-            with latex.render_frame(link={"anchor": anchor_name}, style=base_style):
-                latex.render_nodes(text_fragment.childNodes, style=base_style)
+            with latex.render_frame(link={"anchor": anchor_name}, style=base_context):
+                latex.render_nodes(text_fragment.childNodes, style=base_context)
             return
         text = latex.get_arg_text(node, 1, key="self") or resolver.resolve_ref_text(
             label_name
@@ -189,3 +198,21 @@ def register(latex):
         resolver.append_internal_link(latex, label_name, text)
 
     return resolver
+
+
+def _normalize_external_url(url: str | None) -> str | None:
+    if url is None:
+        return None
+    value = str(url).strip()
+    if not value:
+        return None
+    if "plasTeX.TeXFragment object" in value:
+        return None
+    if "<" in value or ">" in value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return value
+    if parsed.scheme in {"mailto", "ftp"} and parsed.path:
+        return value
+    return None

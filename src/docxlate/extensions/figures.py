@@ -3,13 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx.oxml.ns import qn
-from docx.shared import Emu, Inches
+from docx.shared import Inches, Pt
+from jinja2 import Environment as JinjaEnvironment
 from plasTeX import Command, Environment
 
-from docxlate.docx_ext import (
-    convert_inline_drawing_to_wrapped_anchor,
-    insert_wrapped_caption_anchor,
-)
+from docxlate.model import RenderContext
 
 
 class includegraphics(Command):
@@ -143,6 +141,140 @@ def _estimate_caption_box_height_emu(text: str, box_cx_emu: int) -> int:
     return max(320000, line_count * line_height_emu + padding)
 
 
+def _trim_trailing_whitespace_runs(paragraph):
+    # Remove trailing whitespace-only text runs on anchor host paragraphs.
+    while paragraph.runs:
+        run = paragraph.runs[-1]
+        text = run.text or ""
+        if not text or not text.isspace():
+            break
+        run._r.getparent().remove(run._r)
+
+
+def _caption_template_env() -> JinjaEnvironment:
+    return JinjaEnvironment(
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+        variable_start_string="<<",
+        variable_end_string=">>",
+        block_start_string="<%",
+        block_end_string="%>",
+    )
+
+
+def _caption_template_source(template: str) -> str:
+    source = template
+    # Allow simple {{ var }} placeholders as a compatibility shorthand.
+    if "{{" in source and "<<" not in source:
+        source = source.replace("{{", "<<").replace("}}", ">>")
+    return source
+
+
+def _caption_tex_from_node(latex, node) -> str:
+    fragment = getattr(node, "attributes", {}).get("self")
+    source = getattr(fragment, "source", None) if fragment is not None else None
+    if source is not None and str(source).strip():
+        return str(source).strip()
+    return latex.get_arg_text(node, 0, key="self")
+
+
+def _fragment_text(value) -> str | None:
+    if value is None:
+        return None
+    text_content = getattr(value, "textContent", None)
+    if text_content is not None:
+        text = str(text_content).strip()
+        if text:
+            return text
+    source = getattr(value, "source", None)
+    if source is not None:
+        text = str(source).strip()
+        if text:
+            return text
+    text = str(value).strip()
+    if text and "plasTeX.TeXFragment object" not in text:
+        return text
+    return None
+
+
+def _find_figure_label(latex, node) -> str | None:
+    scope = getattr(node, "parentNode", None)
+    while scope is not None:
+        stack = list(getattr(scope, "childNodes", []) or [])
+        while stack:
+            child = stack.pop(0)
+            if getattr(child, "nodeName", None) == "label":
+                label_name = latex.get_arg_text(child, 0, key="label")
+                if label_name:
+                    return label_name
+            stack[0:0] = list(getattr(child, "childNodes", []) or [])
+        node_name = getattr(scope, "nodeName", None)
+        if node_name in {"figure", "wrapfigure"}:
+            break
+        scope = getattr(scope, "parentNode", None)
+    return None
+
+
+def _resolved_label_number(latex, label_name: str | None) -> str:
+    if not label_name:
+        return "?"
+    refs = latex.context.get("refs", {})
+    ref_info = refs.get(label_name, {})
+    ref_text = ref_info.get("ref_num")
+    if ref_text is not None:
+        return str(ref_text)
+    labels = latex.context.get("labels", {})
+    known = labels.get(label_name, {})
+    known_text = known.get("ref_text")
+    if known_text:
+        return str(known_text)
+    return "?"
+
+
+def _figure_name_from_node(node) -> str:
+    name = _fragment_text(getattr(node, "captionName", None))
+    if name and "\\" not in name and "{" not in name and "}" not in name:
+        return name
+    return "Figure"
+
+
+def _figure_number_from_node(node) -> str | None:
+    value = _fragment_text(getattr(node, "ref", None))
+    if not value:
+        return None
+    if "\\" in value or "{" in value or "}" in value:
+        return None
+    return value
+
+
+def _render_caption_with_template(latex, node) -> str | None:
+    template = latex.context.get("figure_caption_template")
+    if not template:
+        return None
+    slot = "__DOCXLATE_CAPTION_SLOT__"
+    label_name = _find_figure_label(latex, node)
+    fig_num = _resolved_label_number(latex, label_name)
+    if fig_num == "?":
+        parsed_ref = _figure_number_from_node(node)
+        if parsed_ref:
+            fig_num = parsed_ref
+    fig_name = _figure_name_from_node(node)
+    env = _caption_template_env()
+    compiled = env.from_string(_caption_template_source(str(template)))
+    return compiled.render(
+        x=fig_num,
+        number=fig_num,
+        fig_num=fig_num,
+        thefigure=fig_num,
+        fig_name=fig_name,
+        figurename=fig_name,
+        caption=slot,
+        caption_tex=slot,
+        label=label_name or "",
+    ).strip()
+
+
 def register(latex):
     for macro_name, macro_class in {
         "includegraphics": includegraphics,
@@ -164,8 +296,10 @@ def register(latex):
 
         paragraph = latex._active_paragraph()
         if paragraph is None:
-            paragraph = latex.doc.add_paragraph()
-            latex._current_paragraph = paragraph
+            latex._ensure_paragraph()
+            paragraph = latex._active_paragraph()
+        if paragraph is None:
+            return
 
         stack = latex.context.get("figure_stack", [])
         in_wrapfigure = bool(stack and stack[-1].get("kind") == "wrapfigure")
@@ -173,44 +307,59 @@ def register(latex):
         target_width_emu = _resolve_target_width_emu(latex, node, stack if in_wrapfigure else [])
 
         try:
-            run = paragraph.add_run()
-            run.add_picture(str(image_path), width=Emu(target_width_emu))
+            run = latex.emit_image(paragraph, str(image_path), width_emu=target_width_emu)
         except Exception:
-            run = paragraph.add_run()
-            run.add_picture(str(image_path))
+            run = latex.emit_image(paragraph, str(image_path))
 
         if in_wrapfigure:
-            drawing = run._r.find(qn("w:drawing"))
-            if drawing is not None:
-                anchor = convert_inline_drawing_to_wrapped_anchor(
-                    drawing, place=place, pos_y_emu=0
-                )
-                if anchor is not None:
-                    extent = anchor.find(qn("wp:extent"))
-                    if extent is not None and stack:
-                        stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
-                        stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
-                        stack[-1]["target_cx_emu"] = target_width_emu
+            anchor = latex.convert_image_run_to_wrap_anchor(
+                run,
+                place=place,
+                pos_y_emu=0,
+            )
+            if anchor is not None:
+                extent = anchor.find(qn("wp:extent"))
+                if extent is not None and stack:
+                    stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
+                    stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
+                    stack[-1]["target_cx_emu"] = target_width_emu
 
     @latex.command("caption", inline=True)
     def handle_caption(node):
-        p = latex.doc.add_paragraph(style="Caption") if "Caption" in [s.name for s in latex.doc.styles if s.type == 1] else latex.doc.add_paragraph()
         stack = latex.context.get("figure_stack", [])
-        self_fragment = getattr(node, "attributes", {}).get("self")
-        with latex.render_frame(paragraph=p):
-            if self_fragment is not None and getattr(self_fragment, "childNodes", None):
-                latex.render_nodes(self_fragment.childNodes)
-            else:
-                text = latex.get_arg_text(node, 0, key="self")
-                latex.append_inline(text)
+        caption_ctx = RenderContext().with_para_role("caption")
+        p = latex.add_paragraph_for_role("caption")
+        templated = _render_caption_with_template(latex, node)
+        if templated is not None:
+            slot = "__DOCXLATE_CAPTION_SLOT__"
+            self_fragment = getattr(node, "attributes", {}).get("self")
+            prefix, sep, suffix = templated.partition(slot)
+            if prefix:
+                latex.render_latex_fragment(prefix, paragraph=p, style=caption_ctx)
+            with latex.render_frame(paragraph=p, style=caption_ctx):
+                if self_fragment is not None and getattr(self_fragment, "childNodes", None):
+                    latex.render_nodes(self_fragment.childNodes)
+                else:
+                    text = latex.get_arg_text(node, 0, key="self")
+                    latex.append_inline(text)
+            if sep and suffix:
+                latex.render_latex_fragment(suffix, paragraph=p, style=caption_ctx)
+        else:
+            self_fragment = getattr(node, "attributes", {}).get("self")
+            with latex.render_frame(paragraph=p, style=caption_ctx):
+                if self_fragment is not None and getattr(self_fragment, "childNodes", None):
+                    latex.render_nodes(self_fragment.childNodes)
+                else:
+                    text = latex.get_arg_text(node, 0, key="self")
+                    latex.append_inline(text)
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
             box_cx = int(stack[-1].get("target_cx_emu", image_cx))
             caption_cy = _estimate_caption_box_height_emu(p.text, box_cx)
-            insert_wrapped_caption_anchor(
-                latex.doc,
+            latex.emit_wrapped_caption_anchor(
                 source_paragraph=p,
+                anchor_paragraph=stack[-1].get("anchor_paragraph"),
                 place=stack[-1].get("place"),
                 pos_y_emu=image_cy + 114300,
                 box_cx_emu=max(1200000, box_cx),
@@ -222,12 +371,39 @@ def register(latex):
         lines = latex.get_arg_text(node, 0, key="lines")
         place = latex.get_arg_text(node, 0, key="place")
         width = latex.get_arg_text(node, 1, key="width")
-        p = latex.doc.add_paragraph()
+        created_anchor_host = False
+        if latex.doc.paragraphs:
+            p = latex.doc.paragraphs[-1]
+        else:
+            p = latex.add_paragraph_for_role("body")
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
+            created_anchor_host = True
         stack = latex.context.setdefault("figure_stack", [])
-        stack.append({"kind": "wrapfigure", "place": place, "width": width, "lines": lines})
+        stack.append(
+            {
+                "kind": "wrapfigure",
+                "place": place,
+                "width": width,
+                "lines": lines,
+                "anchor_paragraph": p,
+            }
+        )
         try:
-            with latex.render_frame(paragraph=p):
-                latex.render_nodes(node.childNodes)
+            previous_suppress = bool(latex.context.get("_suppress_whitespace_text", False))
+            latex.context["_suppress_whitespace_text"] = True
+            try:
+                with latex.render_frame(paragraph=p):
+                    latex.render_nodes(node.childNodes)
+            finally:
+                latex.context["_suppress_whitespace_text"] = previous_suppress
+            _trim_trailing_whitespace_runs(p)
+            if created_anchor_host:
+                # If wrapfigure appears at the top before any body text exists,
+                # reuse this host for the immediate following paragraph content.
+                latex._current_paragraph = p
+                latex.context["_skip_next_par_break_once"] = True
+                latex.context["_preserve_paragraph_after_env_once"] = True
         finally:
             stack.pop()
 
