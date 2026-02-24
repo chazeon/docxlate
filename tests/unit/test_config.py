@@ -17,9 +17,14 @@ def test_validate_runtime_config_accepts_known_fields():
         "parse_skip_packages": ["fontspec"],
         "parse_skip_usepackage_paths": ["styles/proposal-compact"],
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
-        "wrap": [0.05, 0.3, 0.06, 0.2],
-        "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
-        "wrapfigure_caption_gap_in": 0.2,
+        "image": {
+            "kind": "wrap",
+            "wrap": {
+                "pad": [0.05, 0.3, 0.06, 0.2],
+                "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+                "gap_in": 0.2,
+            },
+        },
     }
     validated = validate_runtime_config(data)
     assert validated["bibliography_template"] == "<< fields.title >>"
@@ -33,15 +38,16 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
     assert validated["mathml2omml_xsl_path"] == "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"
-    assert validated["wrap"]["left"] == 0.2
-    assert validated["wrap"]["right"] == 0.3
-    assert validated["wrap"]["top"] == 0.05
-    assert validated["wrap"]["bottom"] == 0.06
-    assert validated["inset"]["left"] == 0.01
-    assert validated["inset"]["right"] == 0.02
-    assert validated["inset"]["top"] == 0.03
-    assert validated["inset"]["bottom"] == 0.04
-    assert validated["wrapfigure_caption_gap_in"] == 0.2
+    assert validated["image"]["kind"] == "wrap"
+    assert validated["image"]["wrap"]["pad"]["left"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["right"] == 0.3
+    assert validated["image"]["wrap"]["pad"]["top"] == 0.05
+    assert validated["image"]["wrap"]["pad"]["bottom"] == 0.06
+    assert validated["image"]["wrap"]["inset"]["left"] == 0.01
+    assert validated["image"]["wrap"]["inset"]["right"] == 0.02
+    assert validated["image"]["wrap"]["inset"]["top"] == 0.03
+    assert validated["image"]["wrap"]["inset"]["bottom"] == 0.04
+    assert validated["image"]["wrap"]["gap_in"] == 0.2
 
 
 def test_validate_runtime_config_rejects_unknown_fields():
@@ -71,49 +77,49 @@ def test_validate_runtime_config_rejects_invalid_title_policy():
 
 def test_validate_runtime_config_rejects_negative_wrap_distances():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrap": -0.1})
+        validate_runtime_config({"image": {"wrap": {"pad": -0.1}}})
 
 
 def test_validate_runtime_config_rejects_negative_textbox_insets():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"inset": -0.1})
+        validate_runtime_config({"image": {"wrap": {"inset": -0.1}}})
 
 
 def test_validate_runtime_config_rejects_negative_caption_gap():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrapfigure_caption_gap_in": -0.1})
+        validate_runtime_config({"image": {"wrap": {"gap_in": -0.1}}})
 
 
 def test_validate_runtime_config_accepts_wrap_scalar_shorthand():
-    validated = validate_runtime_config({"wrap": 0.2})
-    assert validated["wrap"]["top"] == 0.2
-    assert validated["wrap"]["right"] == 0.2
-    assert validated["wrap"]["bottom"] == 0.2
-    assert validated["wrap"]["left"] == 0.2
+    validated = validate_runtime_config({"image": {"wrap": {"pad": 0.2}}})
+    assert validated["image"]["wrap"]["pad"]["top"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["right"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["bottom"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["left"] == 0.2
 
 
 def test_validate_runtime_config_accepts_wrap_list_shorthand():
-    validated = validate_runtime_config({"wrap": [0.1, 0.2, 0.3, 0.4]})
-    assert validated["wrap"]["top"] == 0.1
-    assert validated["wrap"]["right"] == 0.2
-    assert validated["wrap"]["bottom"] == 0.3
-    assert validated["wrap"]["left"] == 0.4
+    validated = validate_runtime_config({"image": {"wrap": {"pad": [0.1, 0.2, 0.3, 0.4]}}})
+    assert validated["image"]["wrap"]["pad"]["top"] == 0.1
+    assert validated["image"]["wrap"]["pad"]["right"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["bottom"] == 0.3
+    assert validated["image"]["wrap"]["pad"]["left"] == 0.4
 
 
 def test_validate_runtime_config_accepts_wrap_mapping_shorthand():
-    validated = validate_runtime_config({"wrap": {"left": 0.2, "r": 0.3}})
-    assert validated["wrap"]["left"] == 0.2
-    assert validated["wrap"]["right"] == 0.3
-    assert "top" not in validated["wrap"]
-    assert "bottom" not in validated["wrap"]
+    validated = validate_runtime_config({"image": {"wrap": {"pad": {"left": 0.2, "r": 0.3}}}})
+    assert validated["image"]["wrap"]["pad"]["left"] == 0.2
+    assert validated["image"]["wrap"]["pad"]["right"] == 0.3
+    assert "top" not in validated["image"]["wrap"]["pad"]
+    assert "bottom" not in validated["image"]["wrap"]["pad"]
 
 
 def test_validate_runtime_config_accepts_inset_shorthand():
-    validated = validate_runtime_config({"inset": {"t": 0.01, "b": 0.02}})
-    assert validated["inset"]["top"] == 0.01
-    assert validated["inset"]["bottom"] == 0.02
-    assert "left" not in validated["inset"]
-    assert "right" not in validated["inset"]
+    validated = validate_runtime_config({"image": {"wrap": {"inset": {"t": 0.01, "b": 0.02}}}})
+    assert validated["image"]["wrap"]["inset"]["top"] == 0.01
+    assert validated["image"]["wrap"]["inset"]["bottom"] == 0.02
+    assert "left" not in validated["image"]["wrap"]["inset"]
+    assert "right" not in validated["image"]["wrap"]["inset"]
 
 
 def test_validate_runtime_config_rejects_legacy_flat_side_keys():
@@ -121,18 +127,24 @@ def test_validate_runtime_config_rejects_legacy_flat_side_keys():
         validate_runtime_config({"wrapfigure_dist_left_in": 0.2})
     with pytest.raises(ValidationError):
         validate_runtime_config({"wrapfigure_textbox_inset_top_in": 0.1})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrap": 0.1})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"inset": 0.1})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"image": {"wrap": 0.1}})
 
 
 def test_validate_runtime_config_rejects_invalid_shorthand_shapes():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrap": [0.1, 0.2]})
+        validate_runtime_config({"image": {"wrap": {"pad": [0.1, 0.2]}}})
     with pytest.raises(ValidationError):
-        validate_runtime_config({"wrap": {"x": 0.1}})
+        validate_runtime_config({"image": {"wrap": {"pad": {"x": 0.1}}}})
 
 
 def test_validate_runtime_config_rejects_negative_shorthand_values():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"inset": -0.1})
+        validate_runtime_config({"image": {"wrap": {"inset": -0.1}}})
 
 
 def test_sidebox_list_and_mapping_inputs_are_equal():

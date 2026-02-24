@@ -1,5 +1,6 @@
 from __future__ import annotations
 from contextlib import contextmanager
+from collections.abc import Mapping
 
 from docx.oxml.ns import qn
 from docx.shared import Inches
@@ -177,41 +178,42 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
+        image_cfg = self.context.get("image")
+        wrap_cfg = None
+        if isinstance(image_cfg, Mapping):
+            candidate = image_cfg.get("wrap")
+            if isinstance(candidate, Mapping):
+                wrap_cfg = candidate
+
         def _side_emu(
-            box_key: str,
             side_key: str,
             *,
-            legacy_key: str,
             default_emu: int,
         ) -> int:
-            box = self.context.get(box_key)
-            if isinstance(box, dict) and side_key in box:
+            box = None
+            if isinstance(wrap_cfg, Mapping):
+                candidate = wrap_cfg.get("pad")
+                if isinstance(candidate, Mapping):
+                    box = candidate
+            if isinstance(box, Mapping) and side_key in box:
                 return _to_emu(box.get(side_key), default_emu)
-            return _to_emu(self.context.get(legacy_key), default_emu)
+            return default_emu
 
         return {
             "dist_t": _side_emu(
-                "wrap",
                 "top",
-                legacy_key="wrapfigure_dist_top_in",
                 default_emu=0,
             ),
             "dist_b": _side_emu(
-                "wrap",
                 "bottom",
-                legacy_key="wrapfigure_dist_bottom_in",
                 default_emu=0,
             ),
             "dist_l": _side_emu(
-                "wrap",
                 "left",
-                legacy_key="wrapfigure_dist_left_in",
                 default_emu=114300,
             ),
             "dist_r": _side_emu(
-                "wrap",
                 "right",
-                legacy_key="wrapfigure_dist_right_in",
                 default_emu=114300,
             ),
         }
@@ -228,42 +230,43 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
+        image_cfg = self.context.get("image")
+        wrap_cfg = None
+        if isinstance(image_cfg, Mapping):
+            candidate = image_cfg.get("wrap")
+            if isinstance(candidate, Mapping):
+                wrap_cfg = candidate
+
         def _side_emu(
-            box_key: str,
             side_key: str,
             *,
-            legacy_key: str,
             default_emu: int,
         ) -> int:
-            box = self.context.get(box_key)
-            if isinstance(box, dict) and side_key in box:
+            box = None
+            if isinstance(wrap_cfg, Mapping):
+                candidate = wrap_cfg.get("inset")
+                if isinstance(candidate, Mapping):
+                    box = candidate
+            if isinstance(box, Mapping) and side_key in box:
                 return _to_emu(box.get(side_key), default_emu)
-            return _to_emu(self.context.get(legacy_key), default_emu)
+            return default_emu
 
         # Keep conservative defaults; explicit config overrides.
         return {
             "l_ins": _side_emu(
-                "inset",
                 "left",
-                legacy_key="wrapfigure_textbox_inset_left_in",
                 default_emu=0,
             ),
             "r_ins": _side_emu(
-                "inset",
                 "right",
-                legacy_key="wrapfigure_textbox_inset_right_in",
                 default_emu=0,
             ),
             "t_ins": _side_emu(
-                "inset",
                 "top",
-                legacy_key="wrapfigure_textbox_inset_top_in",
                 default_emu=0,
             ),
             "b_ins": _side_emu(
-                "inset",
                 "bottom",
-                legacy_key="wrapfigure_textbox_inset_bottom_in",
                 default_emu=0,
             ),
         }

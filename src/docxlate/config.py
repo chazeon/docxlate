@@ -2,16 +2,24 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 
 class SideBox(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    top: float | None = Field(default=None, ge=0)
-    right: float | None = Field(default=None, ge=0)
-    bottom: float | None = Field(default=None, ge=0)
-    left: float | None = Field(default=None, ge=0)
+    @staticmethod
+    def _field(long_name: str, short_name: str):
+        return Field(
+            default=None,
+            ge=0,
+            validation_alias=AliasChoices(long_name, short_name),
+        )
+
+    top: float | None = _field("top", "t")
+    right: float | None = _field("right", "r")
+    bottom: float | None = _field("bottom", "b")
+    left: float | None = _field("left", "l")
 
     @classmethod
     def from_input(cls, value: Any) -> "SideBox | None":
@@ -26,22 +34,11 @@ class SideBox(BaseModel):
             if len(value) != 4:
                 raise ValueError("side box list input must contain exactly 4 numbers")
             t, r, b, l = value
-            return cls(top=float(t), right=float(r), bottom=float(b), left=float(l))
+            return cls.model_validate(
+                {"top": float(t), "right": float(r), "bottom": float(b), "left": float(l)}
+            )
         if isinstance(value, dict):
-            data = dict(value)
-            aliases = {
-                "t": "top",
-                "r": "right",
-                "b": "bottom",
-                "l": "left",
-            }
-            normalized = {}
-            for key, raw in data.items():
-                resolved = aliases.get(str(key), str(key))
-                if resolved not in {"top", "right", "bottom", "left"}:
-                    raise ValueError(f"unsupported side key: {key}")
-                normalized[resolved] = float(raw)
-            return cls(**normalized)
+            return cls.model_validate(value)
         raise ValueError("side box value must be a number, 4-number list, or mapping")
 
 
@@ -59,14 +56,34 @@ class RuntimeConfig(BaseModel):
     parse_skip_packages: list[str] | None = None
     parse_skip_usepackage_paths: list[str] | None = None
     mathml2omml_xsl_path: str | None = None
-    wrap: SideBox | None = None
-    inset: SideBox | None = None
-    wrapfigure_caption_gap_in: float | None = Field(default=None, ge=0)
+    image: "ImageConfig | None" = None
 
-    @field_validator("wrap", "inset", mode="before")
+
+class ImageWrapConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pad: SideBox | None = Field(
+        default=None,
+        validation_alias=AliasChoices("pad", "wrap"),
+    )
+    inset: SideBox | None = None
+    gap_in: float | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices("gap_in", "gap", "caption_gap_in"),
+    )
+
+    @field_validator("pad", "inset", mode="before")
     @classmethod
     def _parse_side_box(cls, value):
         return SideBox.from_input(value)
+
+
+class ImageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["inline", "wrap"] | None = None
+    wrap: ImageWrapConfig | None = None
 
 
 def validate_runtime_config(data: dict) -> dict:
@@ -74,4 +91,11 @@ def validate_runtime_config(data: dict) -> dict:
     return validated.model_dump(exclude_none=True, exclude_unset=True)
 
 
-__all__ = ["RuntimeConfig", "SideBox", "ValidationError", "validate_runtime_config"]
+__all__ = [
+    "RuntimeConfig",
+    "SideBox",
+    "ImageConfig",
+    "ImageWrapConfig",
+    "ValidationError",
+    "validate_runtime_config",
+]

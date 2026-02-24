@@ -152,7 +152,14 @@ def _trim_trailing_whitespace_runs(paragraph):
 
 
 def _caption_gap_emu(latex) -> int:
-    value = latex.context.get("wrapfigure_caption_gap_in")
+    value = None
+    image_cfg = latex.context.get("image")
+    if isinstance(image_cfg, dict):
+        wrap_cfg = image_cfg.get("wrap")
+        if isinstance(wrap_cfg, dict):
+            value = wrap_cfg.get("gap_in")
+            if value is None:
+                value = wrap_cfg.get("gap")
     if value is None:
         return 114300
     try:

@@ -147,10 +147,11 @@ def test_wrapfigure_distances_are_configurable(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["wrapfigure_dist_left_in"] = 0.2
-    latex.context["wrapfigure_dist_right_in"] = 0.3
-    latex.context["wrapfigure_dist_top_in"] = 0.05
-    latex.context["wrapfigure_dist_bottom_in"] = 0.06
+    latex.context["image"] = {
+        "wrap": {
+            "pad": {"left": 0.2, "right": 0.3, "top": 0.05, "bottom": 0.06},
+        }
+    }
 
     tex = rf"""
 \begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
@@ -189,10 +190,11 @@ def test_wrapfigure_caption_textbox_insets_are_zeroed_in_grouped_mode(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["wrapfigure_textbox_inset_left_in"] = 0.01
-    latex.context["wrapfigure_textbox_inset_right_in"] = 0.02
-    latex.context["wrapfigure_textbox_inset_top_in"] = 0.03
-    latex.context["wrapfigure_textbox_inset_bottom_in"] = 0.04
+    latex.context["image"] = {
+        "wrap": {
+            "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+        }
+    }
 
     tex = rf"""
 \begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
@@ -253,7 +255,7 @@ def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["wrapfigure_caption_gap_in"] = 0.2
+    latex.context["image"] = {"wrap": {"gap_in": 0.2}}
 
     tex = rf"""
 \begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
