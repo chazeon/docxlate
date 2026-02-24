@@ -35,7 +35,7 @@ uv sync
 
 ## CLI
 
-Basic:
+Main command:
 
 ```bash
 docxlate convert input.tex -o output.docx
@@ -59,6 +59,12 @@ Load runtime config from YAML:
 docxlate convert input.tex -o output.docx --config config.yaml
 ```
 
+Legacy one-off styles override (kept for compatibility with older workflows):
+
+```bash
+docxlate convert input.tex -o output.docx --styles-xml styles.xml
+```
+
 Dump DOCX style/layout parts:
 
 ```bash
@@ -70,8 +76,6 @@ docxlate dump-font-table output.docx -o fontTable.xml
 Dumped XML files are auto-formatted for readability.
 
 If `--config` is omitted, `docxlate.yaml` in the current directory is auto-loaded when present.
-
-Legacy CLI alias `docxlate` is still available for compatibility.
 
 ## Library Usage
 
