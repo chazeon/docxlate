@@ -350,7 +350,7 @@ Body after wrap.
 
 def test_caption_template_renders_number_and_caption_text():
     latex.context["plugins"] = {
-        "figure": {"caption_template": r"\textbf{Figure. << x >>} << caption >>"}
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
     }
     latex.context["refs"] = {"fig:demo": {"ref_num": "12"}}
     latex.run(r"\begin{figure}\caption{Cap \textit{alpha}}\label{fig:demo}\end{figure}")
@@ -364,7 +364,7 @@ def test_caption_template_renders_number_and_caption_text():
 
 def test_caption_template_accepts_double_curly_placeholders():
     latex.context["plugins"] = {
-        "figure": {"caption_template": r"\textbf{Figure. {{x}}} {{caption}}"}
+        "figure": {"caption": {"template": r"\textbf{Figure. {{x}}} {{caption}}"}}
     }
     latex.context["refs"] = {"fig:demo": {"ref_num": "7"}}
     latex.run(r"\begin{figure}\caption{Gamma}\label{fig:demo}\end{figure}")
@@ -376,7 +376,7 @@ def test_caption_template_accepts_double_curly_placeholders():
 
 def test_caption_template_uses_unknown_number_when_unresolved():
     latex.context["plugins"] = {
-        "figure": {"caption_template": r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"}
+        "figure": {"caption": {"template": r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"}}
     }
     latex.run(r"\begin{figure}\caption{Delta}\label{fig:demo}\end{figure}")
 
@@ -387,7 +387,7 @@ def test_caption_template_uses_unknown_number_when_unresolved():
 
 def test_caption_template_keeps_caption_spacing_and_inline_formatting():
     latex.context["plugins"] = {
-        "figure": {"caption_template": r"\textbf{Figure. << x >>} << caption >>"}
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
     }
     latex.context["refs"] = {"fig:demo": {"ref_num": "3"}}
     latex.run(

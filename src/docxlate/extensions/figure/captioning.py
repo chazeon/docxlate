@@ -101,7 +101,8 @@ def figure_number_from_node(node) -> str | None:
 
 def render_caption_with_template(latex, node, *, plugin) -> str | None:
     figure_cfg = plugin.figure_config(latex)
-    template = figure_cfg.get("caption_template") if isinstance(figure_cfg, dict) else None
+    caption_cfg = figure_cfg.get("caption") if isinstance(figure_cfg, dict) else None
+    template = caption_cfg.get("template") if isinstance(caption_cfg, dict) else None
     if not template:
         return None
     slot = "__DOCXLATE_CAPTION_SLOT__"

@@ -12,7 +12,8 @@ parse_skip_usepackage_paths:
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
 plugins:
   figure:
-    caption_template: \textbf{<< fig_name >>. << fig_num >>} << caption >>
+    caption:
+      template: \textbf{<< fig_name >>. << fig_num >>} << caption >>
 bibliography_template: |
   <% if authors %>
   <% if authors|length > et_al_limit %>

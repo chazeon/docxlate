@@ -33,13 +33,20 @@ class ImageConfig(BaseModel):
     wrap: WrapConfig | None = None
 
 
+class CaptionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template: str | None = None
+
+
 class FigureConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    caption_template: str | None = None
+    caption: CaptionConfig | None = None
     image: ImageConfig | None = None
 
 __all__ = [
+    "CaptionConfig",
     "FigureConfig",
     "ImageConfig",
     "WrapConfig",

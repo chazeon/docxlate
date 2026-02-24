@@ -19,7 +19,7 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
         "plugins": {
             "figure": {
-                "caption_template": r"\textbf{Figure. << x >>} << caption >>",
+                "caption": {"template": r"\textbf{Figure. << x >>} << caption >>"},
                 "image": {
                     "kind": "wrap",
                     "wrap": {
@@ -43,7 +43,7 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
     assert validated["mathml2omml_xsl_path"] == "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"
-    assert validated["plugins"]["figure"]["caption_template"] == r"\textbf{Figure. << x >>} << caption >>"
+    assert validated["plugins"]["figure"]["caption"]["template"] == r"\textbf{Figure. << x >>} << caption >>"
     assert validated["plugins"]["figure"]["image"]["kind"] == "wrap"
     assert validated["plugins"]["figure"]["image"]["wrap"]["pad"]["left"] == 0.2
     assert validated["plugins"]["figure"]["image"]["wrap"]["inset"]["right"] == 0.02
@@ -71,7 +71,7 @@ def test_validate_runtime_config_unknown_plugin_key_shows_available_keys():
         validate_runtime_config({"plugins": {"figure": {"unknown_field": 1}}})
     message = str(exc_info.value)
     assert "plugins.figure.unknown_field: Extra inputs are not permitted" in message
-    assert "Available keys: caption_template, image" in message
+    assert "Available keys: caption, image" in message
 
 
 def test_validate_runtime_config_rejects_non_positive_indent():
