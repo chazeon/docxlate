@@ -1,16 +1,15 @@
 from .core import LatexBridge
 from .utils import apply_theme_font, inject_omml
-from .aux import parse_abx_aux_cite_order, parse_refs
-from .bbl import format_bibliography_entry, parse_bbl
-from .bcf import parse_bcf
+from .aux import parse_refs
 from .extensions import (
+    register_bibliography_extension,
     register_figures_extension,
     register_hyperref_extension,
     register_lists_extension,
 )
 from .model import RenderContext
 from pathlib import Path
-from docx.shared import Pt, Inches
+from docx.shared import Pt
 import re
 from plasTeX import Command
 
@@ -18,6 +17,7 @@ latex = LatexBridge()
 register_hyperref_extension(latex)
 register_lists_extension(latex)
 register_figures_extension(latex)
+register_bibliography_extension(latex)
 
 
 class And(Command):
@@ -35,89 +35,9 @@ class Needspace(Command):
     args = "len:str"
 
 
-class DocxlateBibEntry(Command):
-    macroName = "docxlatebibentry"
-    args = "idx:str self"
-
-
 latex.macro("and", And)
 latex.macro("color", Color)
 latex.macro("Needspace", Needspace)
-latex.macro("docxlatebibentry", DocxlateBibEntry)
-
-
-def _bibliography_layout_settings() -> dict:
-    """
-    Reference list layout configuration from context.
-    Supported keys:
-    - bibliography_numbering: "bracket" (default) or "none"
-    - bibliography_indent_in: float inches for hanging indent block (default 0.35)
-    """
-    numbering = str(latex.context.get("bibliography_numbering", "bracket")).lower()
-    if numbering not in {"bracket", "none"}:
-        numbering = "bracket"
-    try:
-        indent_in = float(latex.context.get("bibliography_indent_in", 0.35))
-    except (TypeError, ValueError):
-        indent_in = 0.35
-    if indent_in <= 0:
-        indent_in = 0.35
-    return {"numbering": numbering, "indent_in": indent_in}
-
-
-def _reference_number_for_key(key: str, index: int, cite_order: dict[str, int]) -> int:
-    value = cite_order.get(key)
-    if value is not None:
-        return int(value)
-    return index + 1
-
-
-def _parse_positive_int(value: str) -> int | None:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    if parsed <= 0:
-        return None
-    return parsed
-
-
-def _compress_numeric_cite_items(
-    items: list[tuple[str, str]],
-    *,
-    min_run: int,
-) -> list[tuple[str | None, str]]:
-    numeric: list[tuple[str, int]] = []
-    for label, value in items:
-        num = _parse_positive_int(value)
-        if num is None:
-            return [(lbl, val) for lbl, val in items]
-        numeric.append((label, num))
-
-    numeric.sort(key=lambda pair: pair[1])
-    deduped: list[tuple[str, int]] = []
-    seen_nums: set[int] = set()
-    for label, num in numeric:
-        if num in seen_nums:
-            continue
-        seen_nums.add(num)
-        deduped.append((label, num))
-
-    out: list[tuple[str | None, str]] = []
-    i = 0
-    while i < len(deduped):
-        start_label, start_num = deduped[i]
-        j = i
-        while j + 1 < len(deduped) and deduped[j + 1][1] == deduped[j][1] + 1:
-            j += 1
-        run_len = j - i + 1
-        if run_len >= min_run:
-            out.append((start_label, f"{start_num}\u2013{deduped[j][1]}"))
-        else:
-            for k in range(i, j + 1):
-                out.append((deduped[k][0], str(deduped[k][1])))
-        i = j + 1
-    return out
 
 
 def _math_node_text(node):
@@ -437,100 +357,6 @@ def handle_math(node):
             latex._current_paragraph = current_paragraph
 
 
-@latex.command("cite", inline=True)
-def handle_cite(node):
-    cite_order = latex.context.get("cite_order", {})
-    refs = latex.context.get("refs", {})
-    bib_links = latex.context.get("bib_entry_labels", {})
-    bbl_entries = latex.context.get("bbl_entries", {})
-    resolver = getattr(latex, "reference_resolver", None)
-
-    label_text = latex.get_arg_text(node, 0, key="bibkeys")
-    labels = [lbl.strip() for lbl in label_text.split(",") if lbl.strip()]
-    resolved: list[tuple[str, str]] = []
-    for label in labels:
-        ref_num = cite_order.get(label)
-        if ref_num is None:
-            ref_info = refs.get(label, {})
-            ref_num = ref_info.get("ref_num")
-        resolved.append((label, str(ref_num) if ref_num is not None else label))
-    # Keep cite output readable even if upstream mapping contains collisions.
-    seen_values: set[str] = set()
-    unique_resolved: list[tuple[str, str]] = []
-    for label, value in resolved:
-        if value in seen_values:
-            continue
-        seen_values.add(value)
-        unique_resolved.append((label, value))
-    compress_ranges = bool(latex.context.get("citation_compress_ranges", False))
-    try:
-        min_run = int(latex.context.get("citation_range_min_run", 2))
-    except (TypeError, ValueError):
-        min_run = 2
-    if min_run < 2:
-        min_run = 2
-    cite_items: list[tuple[str | None, str]]
-    if compress_ranges:
-        cite_items = _compress_numeric_cite_items(unique_resolved, min_run=min_run)
-    else:
-        cite_items = [(label, value) for label, value in unique_resolved]
-
-    latex.append_inline("[")
-    for idx, (label, value) in enumerate(cite_items):
-        if idx:
-            latex.append_inline(",")
-        target_label = None
-        if label is not None:
-            target_label = bib_links.get(label)
-            if target_label is None and label in bbl_entries:
-                target_label = f"bib:{label}"
-        if resolver is not None and target_label:
-            with latex.render_frame(link={"anchor": resolver.anchor_name(target_label)}):
-                latex.append_inline(value)
-        else:
-            latex.append_inline(value)
-    latex.append_inline("]")
-
-
-@latex.command("docxlatebibentry", inline=True)
-def handle_docxlate_bib_entry(node):
-    idx_text = latex.get_arg_text(node, 0, key="idx")
-    try:
-        idx = int(idx_text)
-    except (TypeError, ValueError):
-        return
-
-    ordered_keys = latex.context.get("_bib_render_order", [])
-    if idx < 0 or idx >= len(ordered_keys):
-        return
-    key = ordered_keys[idx]
-    cite_order = latex.context.get("_bib_render_cite_order", {})
-    layout = latex.context.get("_bib_render_layout") or _bibliography_layout_settings()
-
-    p = latex.add_paragraph_for_role("bibliography")
-    if layout["numbering"] == "bracket":
-        indent = Inches(layout["indent_in"])
-        p.paragraph_format.left_indent = indent
-        p.paragraph_format.first_line_indent = -indent
-        p.paragraph_format.tab_stops.add_tab_stop(indent)
-        ref_num = _reference_number_for_key(key, idx, cite_order)
-        p.add_run(f"[{ref_num}]\t")
-
-    text_fragment = getattr(node, "attributes", {}).get("self")
-    if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-        with latex.render_frame(paragraph=p):
-            latex.render_nodes(text_fragment.childNodes)
-
-    resolver = getattr(latex, "reference_resolver", None)
-    if resolver is not None:
-        label_name = f"bib:{key}"
-        current = latex._current_paragraph
-        latex._current_paragraph = p
-        resolver.register_label(latex, label_name)
-        latex._current_paragraph = current
-        latex.context.setdefault("bib_entry_labels", {})[key] = label_name
-
-
 @latex.on("load")
 def on_load(tex_source, soup):
     """Parse .aux data for citation handling when available."""
@@ -539,25 +365,12 @@ def on_load(tex_source, soup):
     if not tex_path:
         return
     latex.context["refs"] = {}
-    latex.context["bibcites"] = {}
-    latex.context["cite_order"] = {}
-    latex.context["bbl_entries"] = {}
-    latex.context["bib_entry_labels"] = {}
     latex.context["_frontmatter_rendered"] = False
     latex.context["_frontmatter_maketitle_seen"] = False
     aux_path = Path(tex_path).with_suffix(".aux")
     if aux_path.exists():
-        refs, bibcites = parse_refs(aux_path)
+        refs, _bibcites = parse_refs(aux_path)
         latex.context["refs"] = refs
-        latex.context["bibcites"] = bibcites
-        # Prefer biblatex AUX cite stream order; BCF order values can collide.
-        latex.context["cite_order"] = parse_abx_aux_cite_order(aux_path)
-    bcf_path = Path(tex_path).with_suffix(".bcf")
-    if bcf_path.exists() and not latex.context.get("cite_order"):
-        latex.context["cite_order"] = parse_bcf(bcf_path)
-    bbl_path = Path(tex_path).with_suffix(".bbl")
-    if bbl_path.exists():
-        latex.context["bbl_entries"] = parse_bbl(bbl_path)
 
 
 @latex.on("post_process")
@@ -587,52 +400,6 @@ def render_implicit_front_matter():
         return
     # Auto/always: emit once at document start when maketitle is absent.
     _emit_front_matter(prepend=True)
-
-
-@latex.on("post_process")
-def append_references():
-    entries = latex.context.get("bbl_entries", {})
-    if not entries:
-        return
-
-    cite_order = latex.context.get("cite_order", {})
-    if cite_order:
-        ordered_keys = [k for k, _ in sorted(cite_order.items(), key=lambda item: item[1]) if k in entries]
-    else:
-        ordered_keys = sorted(entries.keys())
-    if not ordered_keys:
-        return
-
-    heading = latex.add_paragraph_for_role("references_heading")
-    with latex.render_frame(paragraph=heading):
-        latex.append_inline("References", style={"bold": True, "theme": "major"})
-    latex.mark_next_body_paragraph_first()
-    latex.context["bib_entry_labels"] = {}
-    layout = _bibliography_layout_settings()
-    bib_template = latex.context.get("bibliography_template")
-    try:
-        et_al_limit = int(latex.context.get("bibliography_et_al_limit", 3))
-    except (TypeError, ValueError):
-        et_al_limit = 3
-
-    chunks: list[str] = []
-    for index, key in enumerate(ordered_keys):
-        text = format_bibliography_entry(
-            entries[key],
-            template=bib_template,
-            et_al_limit=et_al_limit,
-        )
-        chunks.append(rf"\docxlatebibentry{{{index}}}{{{text}}}")
-
-    latex.context["_bib_render_order"] = ordered_keys
-    latex.context["_bib_render_layout"] = layout
-    latex.context["_bib_render_cite_order"] = cite_order
-    try:
-        latex.render_latex_fragment("\n".join(chunks))
-    finally:
-        latex.context.pop("_bib_render_order", None)
-        latex.context.pop("_bib_render_layout", None)
-        latex.context.pop("_bib_render_cite_order", None)
 
 
 @latex.command("$", inline=True)

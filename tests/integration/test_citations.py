@@ -154,7 +154,7 @@ def test_references_section_can_disable_numbering_layout(tmp_path):
     bbl_path.write_text(Path("tests/fixtures/bbl/sample.bbl").read_text())
 
     latex.context["tex_path"] = str(tex_path)
-    latex.context["bibliography_numbering"] = "none"
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})["numbering"] = "none"
     latex.run(tex_path.read_text())
 
     ref_para = next((p for p in latex.doc.paragraphs if "A sample article" in p.text), None)
@@ -172,7 +172,9 @@ def test_cite_compresses_numeric_ranges():
         "D": 4,
         "E": 5,
     }
-    latex.context["citation_compress_ranges"] = True
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "citation_compress_ranges"
+    ] = True
 
     latex.run(r"\cite{A,B,C,D,E}")
 
@@ -185,8 +187,12 @@ def test_cite_compresses_with_min_run_threshold():
         "B": 2,
         "C": 4,
     }
-    latex.context["citation_compress_ranges"] = True
-    latex.context["citation_range_min_run"] = 3
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "citation_compress_ranges"
+    ] = True
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "citation_range_min_run"
+    ] = 3
 
     latex.run(r"\cite{A,B,C}")
 
@@ -202,7 +208,9 @@ def test_cite_mixed_reference_and_note_keys_revtex_style():
         "NoteX": 2,
         "RefB": 3,
     }
-    latex.context["citation_compress_ranges"] = True
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "citation_compress_ranges"
+    ] = True
 
     latex.run(r"\cite{RefA,NoteX,RefB}")
 

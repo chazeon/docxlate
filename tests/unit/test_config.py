@@ -7,17 +7,20 @@ from docxlate.model import Edges, Point
 
 def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     data = {
-        "bibliography_template": "<< fields.title >>",
-        "bibliography_numbering": "none",
-        "bibliography_indent_in": 0.4,
-        "bibliography_et_al_limit": 2,
-        "citation_compress_ranges": True,
-        "citation_range_min_run": 3,
         "title_render_policy": "auto",
         "parse_skip_packages": ["fontspec"],
         "parse_skip_usepackage_paths": ["styles/proposal-compact"],
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
         "plugins": {
+            "bibliography": {
+                "template": "<< fields.title >>",
+                "numbering": "none",
+                "indent_in": 0.4,
+                "et_al_limit": 2,
+                "macro_replacements": {"bibinitperiod": "·"},
+                "citation_compress_ranges": True,
+                "citation_range_min_run": 3,
+            },
             "figure": {
                 "caption": {"template": r"\textbf{Figure. << x >>} << caption >>"},
                 "image": {
@@ -33,12 +36,13 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
         },
     }
     validated = validate_runtime_config(data)
-    assert validated["bibliography_template"] == "<< fields.title >>"
-    assert validated["bibliography_numbering"] == "none"
-    assert validated["bibliography_indent_in"] == 0.4
-    assert validated["bibliography_et_al_limit"] == 2
-    assert validated["citation_compress_ranges"] is True
-    assert validated["citation_range_min_run"] == 3
+    assert validated["plugins"]["bibliography"]["template"] == "<< fields.title >>"
+    assert validated["plugins"]["bibliography"]["numbering"] == "none"
+    assert validated["plugins"]["bibliography"]["indent_in"] == 0.4
+    assert validated["plugins"]["bibliography"]["et_al_limit"] == 2
+    assert validated["plugins"]["bibliography"]["macro_replacements"]["bibinitperiod"] == "·"
+    assert validated["plugins"]["bibliography"]["citation_compress_ranges"] is True
+    assert validated["plugins"]["bibliography"]["citation_range_min_run"] == 3
     assert validated["title_render_policy"] == "auto"
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
@@ -76,17 +80,24 @@ def test_validate_runtime_config_unknown_plugin_key_shows_available_keys():
 
 def test_validate_runtime_config_rejects_non_positive_indent():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"bibliography_indent_in": 0})
+        validate_runtime_config({"plugins": {"bibliography": {"indent_in": 0}}})
 
 
 def test_validate_runtime_config_rejects_non_positive_et_al_limit():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"bibliography_et_al_limit": 0})
+        validate_runtime_config({"plugins": {"bibliography": {"et_al_limit": 0}}})
+
+
+def test_validate_runtime_config_rejects_non_string_bibliography_macro_replacement():
+    with pytest.raises(ValidationError):
+        validate_runtime_config(
+            {"plugins": {"bibliography": {"macro_replacements": {"bibinitperiod": 1}}}}
+        )
 
 
 def test_validate_runtime_config_rejects_small_citation_min_run():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"citation_range_min_run": 1})
+        validate_runtime_config({"plugins": {"bibliography": {"citation_range_min_run": 1}}})
 
 
 def test_validate_runtime_config_rejects_invalid_title_policy():

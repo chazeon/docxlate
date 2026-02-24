@@ -1,6 +1,3 @@
-bibliography_et_al_limit: 1
-citation_compress_ranges: true
-citation_range_min_run: 2
 title_render_policy: explicit
 parse_skip_packages:
   - fontspec
@@ -11,19 +8,23 @@ parse_skip_usepackage_paths:
   - styles/proposal-compact
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
 plugins:
+  bibliography:
+    et_al_limit: 1
+    citation_compress_ranges: true
+    citation_range_min_run: 2
+    template: |
+      <% if authors %>
+      <% if authors|length > et_al_limit %>
+      << authors[:et_al_limit]|join(", ") >>, \textit{et al.}
+      <% else %>
+      << authors|join(", ") >>
+      <% endif %>
+      .<% endif %>
+      <% if fields.year %> (<< fields.year >>).<% endif %>
+      <% if fields.journaltitle or fields.volume or fields.number or fields.pages %>
+       <% if fields.journaltitle %>\textit{<< fields.journaltitle >>}<% endif %><% if fields.volume and fields.number %>, << fields.volume >>(<< fields.number >>)<% elif fields.volume %>, << fields.volume >><% endif %><% if fields.pages %>, << fields.pages >><% endif %>.
+      <% endif %>
+      <% if fields.doi %> \textsc{doi}: \href{https://doi.org/<< fields.doi >>}{\texttt{<< fields.doi >>}}.<% endif %>
   figure:
     caption:
       template: \textbf{<< fig_name >>. << fig_num >>} << caption >>
-bibliography_template: |
-  <% if authors %>
-  <% if authors|length > et_al_limit %>
-  << authors[:et_al_limit]|join(", ") >>, \textit{et al.}
-  <% else %>
-  << authors|join(", ") >>
-  <% endif %>
-  .<% endif %>
-  <% if fields.year %> (<< fields.year >>).<% endif %>
-  <% if fields.journaltitle or fields.volume or fields.number or fields.pages %>
-   <% if fields.journaltitle %>\textit{<< fields.journaltitle >>}<% endif %><% if fields.volume and fields.number %>, << fields.volume >>(<< fields.number >>)<% elif fields.volume %>, << fields.volume >><% endif %><% if fields.pages %>, << fields.pages >><% endif %>.
-  <% endif %>
-  <% if fields.doi %> \textsc{doi}: \href{https://doi.org/<< fields.doi >>}{\texttt{<< fields.doi >>}}.<% endif %>

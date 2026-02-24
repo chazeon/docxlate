@@ -80,10 +80,12 @@ def test_cli_loads_yaml_config_for_bibliography_template(tmp_path):
     config_path.write_text(
         "\n".join(
             [
-                "bibliography_numbering: none",
-                "bibliography_template: |",
-                "  <% if authors %><< authors|join(\", \") >>.<% endif %>",
-                "  <% if fields.journaltitle %> \\textit{<< fields.journaltitle >>}.<% endif %>",
+                "plugins:",
+                "  bibliography:",
+                "    numbering: none",
+                "    template: |",
+                "      <% if authors %><< authors|join(\", \") >>.<% endif %>",
+                "      <% if fields.journaltitle %> \\textit{<< fields.journaltitle >>}.<% endif %>",
             ]
         ),
         encoding="utf-8",

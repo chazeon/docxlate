@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from .config_plugins import get_extension_plugin, list_extension_plugin_names
 from .extensions import ensure_config_plugins_registered
@@ -11,12 +11,6 @@ from .extensions import ensure_config_plugins_registered
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    bibliography_template: str | None = None
-    bibliography_numbering: Literal["bracket", "none"] | None = None
-    bibliography_indent_in: float | None = Field(default=None, gt=0)
-    bibliography_et_al_limit: int | None = Field(default=None, gt=0)
-    citation_compress_ranges: bool | None = None
-    citation_range_min_run: int | None = Field(default=None, gt=1)
     title_render_policy: Literal["explicit", "auto", "always"] | None = None
     parse_skip_packages: list[str] | None = None
     parse_skip_usepackage_paths: list[str] | None = None
