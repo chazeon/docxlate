@@ -20,10 +20,11 @@ def test_validate_runtime_config_accepts_known_fields():
         "image": {
             "kind": "wrap",
             "wrap": {
-                "pad": [0.05, 0.3, 0.06, 0.2],
-                "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
-                "gap_in": 0.2,
-            },
+            "pad": [0.05, 0.3, 0.06, 0.2],
+            "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+            "gap": 0.2,
+            "offset": {"y": 0.1},
+        },
         },
     }
     validated = validate_runtime_config(data)
@@ -47,7 +48,8 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["image"]["wrap"]["inset"]["right"] == 0.02
     assert validated["image"]["wrap"]["inset"]["top"] == 0.03
     assert validated["image"]["wrap"]["inset"]["bottom"] == 0.04
-    assert validated["image"]["wrap"]["gap_in"] == 0.2
+    assert validated["image"]["wrap"]["gap"] == 0.2
+    assert validated["image"]["wrap"]["offset"]["y"] == 0.1
 
 
 def test_validate_runtime_config_rejects_unknown_fields():
@@ -87,7 +89,7 @@ def test_validate_runtime_config_rejects_negative_textbox_insets():
 
 def test_validate_runtime_config_rejects_negative_caption_gap():
     with pytest.raises(ValidationError):
-        validate_runtime_config({"image": {"wrap": {"gap_in": -0.1}}})
+        validate_runtime_config({"image": {"wrap": {"gap": -0.1}}})
 
 
 def test_validate_runtime_config_accepts_wrap_scalar_shorthand():
@@ -145,6 +147,31 @@ def test_validate_runtime_config_rejects_invalid_shorthand_shapes():
 def test_validate_runtime_config_rejects_negative_shorthand_values():
     with pytest.raises(ValidationError):
         validate_runtime_config({"image": {"wrap": {"inset": -0.1}}})
+
+
+def test_validate_runtime_config_accepts_offset_scalar_and_mapping():
+    v1 = validate_runtime_config({"image": {"wrap": {"offset": 0.25}}})
+    v2 = validate_runtime_config({"image": {"wrap": {"offset": {"y": 0.25}}}})
+    assert v1["image"]["wrap"]["offset"]["y"] == 0.25
+    assert v2["image"]["wrap"]["offset"]["y"] == 0.25
+
+
+def test_validate_runtime_config_accepts_offset_xy_list():
+    v = validate_runtime_config({"image": {"wrap": {"offset": [0.1, 0.2]}}})
+    assert v["image"]["wrap"]["offset"]["x"] == 0.1
+    assert v["image"]["wrap"]["offset"]["y"] == 0.2
+
+
+def test_validate_runtime_config_rejects_invalid_offset_mapping():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"image": {"wrap": {"offset": {"z": 0.1}}}})
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"image": {"wrap": {"offset": [0.1]}}})
+
+
+def test_validate_runtime_config_accepts_gap_in_alias():
+    validated = validate_runtime_config({"image": {"wrap": {"gap_in": 0.2}}})
+    assert validated["image"]["wrap"]["gap"] == 0.2
 
 
 def test_sidebox_list_and_mapping_inputs_are_equal():

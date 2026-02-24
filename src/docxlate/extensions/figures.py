@@ -157,9 +157,9 @@ def _caption_gap_emu(latex) -> int:
     if isinstance(image_cfg, dict):
         wrap_cfg = image_cfg.get("wrap")
         if isinstance(wrap_cfg, dict):
-            value = wrap_cfg.get("gap_in")
+            value = wrap_cfg.get("gap")
             if value is None:
-                value = wrap_cfg.get("gap")
+                value = wrap_cfg.get("gap_in")
     if value is None:
         return 114300
     try:
@@ -168,6 +168,24 @@ def _caption_gap_emu(latex) -> int:
         return 114300
     if inches < 0:
         return 114300
+    return int(Inches(inches))
+
+
+def _wrap_offset_y_emu(latex) -> int:
+    value = None
+    image_cfg = latex.context.get("image")
+    if isinstance(image_cfg, dict):
+        wrap_cfg = image_cfg.get("wrap")
+        if isinstance(wrap_cfg, dict):
+            offset = wrap_cfg.get("offset")
+            if isinstance(offset, dict):
+                value = offset.get("y")
+    if value is None:
+        return 0
+    try:
+        inches = float(value)
+    except (TypeError, ValueError):
+        return 0
     return int(Inches(inches))
 
 
@@ -384,7 +402,7 @@ def register(latex):
                     caption_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
                     place=stack[-1].get("place"),
-                    pos_y_emu=0,
+                    pos_y_emu=_wrap_offset_y_emu(latex),
                     box_cx_emu=max(1200000, box_cx),
                     box_cy_emu=max(320000, image_cy + gap_emu + caption_cy),
                     gap_emu=gap_emu,
@@ -395,7 +413,7 @@ def register(latex):
                     source_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
                     place=stack[-1].get("place"),
-                    pos_y_emu=image_cy + gap_emu,
+                    pos_y_emu=_wrap_offset_y_emu(latex) + image_cy + gap_emu,
                     box_cx_emu=max(1200000, box_cx),
                     box_cy_emu=caption_cy,
                 )
@@ -438,7 +456,7 @@ def register(latex):
                     anchor = latex.convert_image_run_to_wrap_anchor(
                         image_run,
                         place=stack[-1].get("place"),
-                        pos_y_emu=0,
+                        pos_y_emu=_wrap_offset_y_emu(latex),
                     )
                     if anchor is not None:
                         stack[-1]["wrapped_emitted"] = True

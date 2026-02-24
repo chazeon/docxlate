@@ -255,7 +255,7 @@ def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["image"] = {"wrap": {"gap_in": 0.2}}
+    latex.context["image"] = {"wrap": {"gap": 0.2}}
 
     tex = rf"""
 \begin{{wrapfigure}}{{r}}{{0.4\textwidth}}

@@ -42,6 +42,30 @@ class SideBox(BaseModel):
         raise ValueError("side box value must be a number, 4-number list, or mapping")
 
 
+class Offset2D(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float | None = None
+    y: float | None = None
+
+    @classmethod
+    def from_input(cls, value: Any) -> "Offset2D | None":
+        if value is None:
+            return None
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, (int, float)):
+            return cls(y=float(value))
+        if isinstance(value, (list, tuple)):
+            if len(value) != 2:
+                raise ValueError("offset list input must contain exactly 2 numbers: [x, y]")
+            x, y = value
+            return cls(x=float(x), y=float(y))
+        if isinstance(value, dict):
+            return cls.model_validate(value)
+        raise ValueError("offset value must be a number, 2-number list, or mapping")
+
+
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,16 +91,22 @@ class ImageWrapConfig(BaseModel):
         validation_alias=AliasChoices("pad", "wrap"),
     )
     inset: SideBox | None = None
-    gap_in: float | None = Field(
+    gap: float | None = Field(
         default=None,
         ge=0,
-        validation_alias=AliasChoices("gap_in", "gap", "caption_gap_in"),
+        validation_alias=AliasChoices("gap", "gap_in", "caption_gap_in"),
     )
+    offset: Offset2D | None = None
 
     @field_validator("pad", "inset", mode="before")
     @classmethod
     def _parse_side_box(cls, value):
         return SideBox.from_input(value)
+
+    @field_validator("offset", mode="before")
+    @classmethod
+    def _parse_offset(cls, value):
+        return Offset2D.from_input(value)
 
 
 class ImageConfig(BaseModel):
@@ -94,6 +124,7 @@ def validate_runtime_config(data: dict) -> dict:
 __all__ = [
     "RuntimeConfig",
     "SideBox",
+    "Offset2D",
     "ImageConfig",
     "ImageWrapConfig",
     "ValidationError",
