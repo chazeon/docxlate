@@ -316,7 +316,6 @@ def register(latex):
 
         stack = latex.context.get("figure_stack", [])
         in_wrapfigure = bool(stack and stack[-1].get("kind") == "wrapfigure")
-        place = stack[-1].get("place") if in_wrapfigure else None
         target_width_emu = _resolve_target_width_emu(latex, node, stack if in_wrapfigure else [])
 
         try:
@@ -325,17 +324,14 @@ def register(latex):
             run = latex.emit_image(paragraph, str(image_path))
 
         if in_wrapfigure:
-            anchor = latex.convert_image_run_to_wrap_anchor(
-                run,
-                place=place,
-                pos_y_emu=0,
-            )
-            if anchor is not None:
-                extent = anchor.find(qn("wp:extent"))
-                if extent is not None and stack:
-                    stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
-                    stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
-                    stack[-1]["target_cx_emu"] = target_width_emu
+            drawing = run._r.find(qn("w:drawing"))
+            inline = drawing.find(qn("wp:inline")) if drawing is not None else None
+            extent = inline.find(qn("wp:extent")) if inline is not None else None
+            if extent is not None and stack:
+                stack[-1]["image_run"] = run
+                stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
+                stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
+                stack[-1]["target_cx_emu"] = target_width_emu
 
     @latex.command("caption", inline=True)
     def handle_caption(node):
@@ -369,15 +365,31 @@ def register(latex):
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
             box_cx = int(stack[-1].get("target_cx_emu", image_cx))
+            image_run = stack[-1].get("image_run")
             caption_cy = _estimate_caption_box_height_emu(p.text, box_cx)
-            latex.emit_wrapped_caption_anchor(
-                source_paragraph=p,
-                anchor_paragraph=stack[-1].get("anchor_paragraph"),
-                place=stack[-1].get("place"),
-                pos_y_emu=image_cy + _caption_gap_emu(latex),
-                box_cx_emu=max(1200000, box_cx),
-                box_cy_emu=caption_cy,
-            )
+            gap_emu = _caption_gap_emu(latex)
+            if image_run is not None:
+                latex.emit_wrapped_figure_caption_group_anchor(
+                    image_run=image_run,
+                    caption_paragraph=p,
+                    anchor_paragraph=stack[-1].get("anchor_paragraph"),
+                    place=stack[-1].get("place"),
+                    pos_y_emu=0,
+                    box_cx_emu=max(1200000, box_cx),
+                    box_cy_emu=max(320000, image_cy + gap_emu + caption_cy),
+                    gap_emu=gap_emu,
+                )
+                stack[-1]["wrapped_emitted"] = True
+            else:
+                latex.emit_wrapped_caption_anchor(
+                    source_paragraph=p,
+                    anchor_paragraph=stack[-1].get("anchor_paragraph"),
+                    place=stack[-1].get("place"),
+                    pos_y_emu=image_cy + gap_emu,
+                    box_cx_emu=max(1200000, box_cx),
+                    box_cy_emu=caption_cy,
+                )
+                stack[-1]["wrapped_emitted"] = True
 
     @latex.env("wrapfigure")
     def handle_wrapfigure(node):
@@ -410,6 +422,16 @@ def register(latex):
                     latex.render_nodes(node.childNodes)
             finally:
                 latex.context["_suppress_whitespace_text"] = previous_suppress
+            if stack and stack[-1].get("kind") == "wrapfigure":
+                image_run = stack[-1].get("image_run")
+                if image_run is not None and not stack[-1].get("wrapped_emitted"):
+                    anchor = latex.convert_image_run_to_wrap_anchor(
+                        image_run,
+                        place=stack[-1].get("place"),
+                        pos_y_emu=0,
+                    )
+                    if anchor is not None:
+                        stack[-1]["wrapped_emitted"] = True
             _trim_trailing_whitespace_runs(p)
             if created_anchor_host:
                 # If wrapfigure appears at the top before any body text exists,

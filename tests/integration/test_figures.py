@@ -85,7 +85,6 @@ def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
     assert "<wp:anchor" in image_para._element.xml
     assert "<wp:wrapSquare" in image_para._element.xml
     assert "<wp:align>right</wp:align>" in image_para._element.xml
-    assert "<wp:inline" not in image_para._element.xml
     assert "wp:distT=" not in image_para._element.xml
     assert "wp:relativeFrom=" not in image_para._element.xml
     assert 'distT="0"' in image_para._element.xml
@@ -271,23 +270,15 @@ def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     )
     root = etree.fromstring(anchor_para._element.xml.encode("utf-8"))
     ns = {
-        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
-        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-        "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
     }
-    anchors = root.xpath(".//wp:anchor", namespaces=ns)
-    image_anchor = next(a for a in anchors if a.xpath(".//pic:pic", namespaces=ns))
-    caption_anchor = next(
-        a
-        for a in anchors
-        if a.xpath(
-            ".//a:graphicData[@uri='http://schemas.microsoft.com/office/word/2010/wordprocessingShape']",
-            namespaces=ns,
-        )
+    spacing_after = root.xpath(
+        "string(.//wps:txbx/w:txbxContent/w:p[1]/w:pPr/w:spacing/@w:after)",
+        namespaces=ns,
     )
-    image_cy = int(image_anchor.xpath("string(.//wp:extent/@cy)", namespaces=ns))
-    caption_pos = int(caption_anchor.xpath("string(.//wp:positionV/wp:posOffset)", namespaces=ns))
-    assert caption_pos == image_cy + int(0.2 * 914400)
+    assert spacing_after
+    assert int(spacing_after) == int((0.2 * 914400) // 635)
 
 
 def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):

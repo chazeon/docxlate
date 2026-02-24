@@ -21,6 +21,34 @@ def _next_docpr_id(doc) -> int:
     return max(ids, default=0) + 1
 
 
+def next_anchor_group_id(doc) -> int:
+    """
+    Allocate a stable numeric group id used to associate related wrapped anchors
+    (e.g., image + caption) before migrating to true grouped shapes.
+    """
+    max_group = 0
+    for paragraph in doc.paragraphs:
+        for drawing in paragraph._p.findall(".//" + qn("w:drawing")):
+            for doc_pr in drawing.findall(".//" + qn("wp:docPr")):
+                descr = doc_pr.get("descr", "")
+                if not descr.startswith("docxlate-wrap-group:"):
+                    continue
+                payload = descr.removeprefix("docxlate-wrap-group:")
+                gid, _, _role = payload.partition(":")
+                if gid.isdigit():
+                    max_group = max(max_group, int(gid))
+    return max_group + 1
+
+
+def _tag_group_member(anchor, *, group_id: int, role: str):
+    doc_pr = anchor.find(qn("wp:docPr"))
+    if doc_pr is None:
+        return
+    doc_pr.set("descr", f"docxlate-wrap-group:{int(group_id)}:{role}")
+    name = doc_pr.get("name") or "Wrapped Object"
+    doc_pr.set("name", f"{name} (Group {int(group_id)} {role})")
+
+
 def _build_common_anchor(
     *,
     place: str | None,
@@ -97,6 +125,7 @@ def convert_inline_drawing_to_wrapped_anchor(
     place: str | None,
     pos_y_emu: int = 0,
     wrap_distances_emu: dict[str, int] | None = None,
+    group_id: int | None = None,
 ):
     inline = drawing_elm.find(qn("wp:inline"))
     if inline is None:
@@ -125,6 +154,8 @@ def convert_inline_drawing_to_wrapped_anchor(
 
     drawing_elm.remove(inline)
     drawing_elm.append(anchor)
+    if group_id is not None:
+        _tag_group_member(anchor, group_id=group_id, role="image")
     return anchor
 
 
@@ -139,6 +170,7 @@ def insert_wrapped_caption_anchor(
     box_cy_emu: int,
     wrap_distances_emu: dict[str, int] | None = None,
     textbox_insets_emu: dict[str, int] | None = None,
+    group_id: int | None = None,
 ):
     anchor = _build_common_anchor(
         place=place,
@@ -227,4 +259,132 @@ def insert_wrapped_caption_anchor(
 
     body = doc._element.body
     body.remove(source_paragraph._p)
+    if group_id is not None:
+        _tag_group_member(anchor, group_id=group_id, role="caption")
+    return anchor_para
+
+
+def insert_wrapped_figure_caption_group_anchor(
+    doc,
+    *,
+    image_run,
+    caption_paragraph,
+    anchor_paragraph=None,
+    place: str | None,
+    pos_y_emu: int,
+    box_cx_emu: int,
+    box_cy_emu: int,
+    gap_emu: int,
+    wrap_distances_emu: dict[str, int] | None = None,
+    textbox_insets_emu: dict[str, int] | None = None,
+):
+    drawing_elm = image_run._r.find(qn("w:drawing"))
+    if drawing_elm is None:
+        return None
+    inline = drawing_elm.find(qn("wp:inline"))
+    if inline is None:
+        return None
+
+    anchor = _build_common_anchor(
+        place=place,
+        pos_y_emu=pos_y_emu,
+        cx_emu=box_cx_emu,
+        cy_emu=box_cy_emu,
+        wrap_distances_emu=wrap_distances_emu,
+    )
+
+    doc_pr = OxmlElement("wp:docPr")
+    doc_pr.set("id", str(_next_docpr_id(doc)))
+    doc_pr.set("name", "Wrapped Figure+Caption")
+    anchor.append(doc_pr)
+    anchor.append(OxmlElement("wp:cNvGraphicFramePr"))
+
+    graphic = OxmlElement("a:graphic")
+    graphic_data = OxmlElement("a:graphicData")
+    graphic_data.set(
+        "uri", "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+    )
+    graphic.append(graphic_data)
+    anchor.append(graphic)
+
+    wsp = OxmlElement("wps:wsp")
+    graphic_data.append(wsp)
+    wsp.append(OxmlElement("wps:cNvSpPr"))
+
+    sp_pr = OxmlElement("wps:spPr")
+    wsp.append(sp_pr)
+    xfrm = OxmlElement("a:xfrm")
+    sp_pr.append(xfrm)
+    off = OxmlElement("a:off")
+    off.set("x", "0")
+    off.set("y", "0")
+    xfrm.append(off)
+    ext = OxmlElement("a:ext")
+    ext.set("cx", str(max(1, box_cx_emu)))
+    ext.set("cy", str(max(1, box_cy_emu)))
+    xfrm.append(ext)
+    geom = OxmlElement("a:prstGeom")
+    geom.set("prst", "rect")
+    geom.append(OxmlElement("a:avLst"))
+    sp_pr.append(geom)
+    solid_fill = OxmlElement("a:solidFill")
+    srgb = OxmlElement("a:srgbClr")
+    srgb.set("val", "FFFFFF")
+    solid_fill.append(srgb)
+    sp_pr.append(solid_fill)
+    ln = OxmlElement("a:ln")
+    ln.append(OxmlElement("a:noFill"))
+    sp_pr.append(ln)
+
+    txbx = OxmlElement("wps:txbx")
+    wsp.append(txbx)
+    txbx_content = OxmlElement("w:txbxContent")
+    txbx.append(txbx_content)
+
+    image_para = OxmlElement("w:p")
+    image_run_copy = deepcopy(image_run._r)
+    image_para.append(image_run_copy)
+    image_para_pr = OxmlElement("w:pPr")
+    spacing = OxmlElement("w:spacing")
+    spacing.set(qn("w:after"), str(max(0, int(gap_emu)) // 635))
+    image_para_pr.append(spacing)
+    image_para.insert(0, image_para_pr)
+    txbx_content.append(image_para)
+    txbx_content.append(deepcopy(caption_paragraph._p))
+
+    body_pr = OxmlElement("wps:bodyPr")
+    insets = textbox_insets_emu or {}
+    for key, attr in (
+        ("l_ins", "lIns"),
+        ("r_ins", "rIns"),
+        ("t_ins", "tIns"),
+        ("b_ins", "bIns"),
+    ):
+        if key not in insets:
+            continue
+        body_pr.set(attr, str(max(0, int(insets[key]))))
+    body_pr.append(OxmlElement("a:spAutoFit"))
+    wsp.append(body_pr)
+
+    anchor_para = anchor_paragraph
+    if anchor_para is None:
+        anchor_para = doc.add_paragraph()
+        try:
+            anchor_para.style = caption_paragraph.style
+        except Exception:
+            pass
+        anchor_para.paragraph_format.space_before = 0
+        anchor_para.paragraph_format.space_after = 0
+    run = anchor_para.add_run()
+    drawing = OxmlElement("w:drawing")
+    drawing.append(anchor)
+    run._r.append(drawing)
+
+    image_parent = image_run._r.getparent()
+    if image_parent is not None:
+        image_parent.remove(image_run._r)
+
+    body = doc._element.body
+    if caption_paragraph._p.getparent() is body:
+        body.remove(caption_paragraph._p)
     return anchor_para

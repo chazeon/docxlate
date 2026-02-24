@@ -759,6 +759,30 @@ class LatexBridge:
             box_cy_emu=box_cy_emu,
         )
 
+    def emit_wrapped_figure_caption_group_anchor(
+        self,
+        *,
+        image_run,
+        caption_paragraph,
+        anchor_paragraph=None,
+        place: str | None,
+        pos_y_emu: int,
+        box_cx_emu: int,
+        box_cy_emu: int,
+        gap_emu: int,
+    ):
+        return self.emitter.emit_wrapped_figure_caption_group_anchor(
+            self.doc,
+            image_run=image_run,
+            caption_paragraph=caption_paragraph,
+            anchor_paragraph=anchor_paragraph,
+            place=place,
+            pos_y_emu=pos_y_emu,
+            box_cx_emu=box_cx_emu,
+            box_cy_emu=box_cy_emu,
+            gap_emu=gap_emu,
+        )
+
     def _emit_line_break(self):
         self._ensure_paragraph()
         paragraph = self._active_paragraph()

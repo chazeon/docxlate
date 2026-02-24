@@ -7,6 +7,8 @@ from docxlate.model import EquationSpec, LinkTarget, TextSpan
 from docxlate.utils import apply_theme_font, inject_omml
 from .floating import (
     convert_inline_drawing_to_wrapped_anchor,
+    insert_wrapped_figure_caption_group_anchor,
+    next_anchor_group_id,
     insert_wrapped_caption_anchor,
 )
 from .hyperlink import HyperlinkWriter
@@ -95,6 +97,7 @@ class DocxEmitterBackend:
         *,
         place: str | None,
         pos_y_emu: int = 0,
+        group_id: int | None = None,
     ):
         drawing = run._r.find(qn("w:drawing"))
         if drawing is None:
@@ -104,6 +107,7 @@ class DocxEmitterBackend:
             place=place,
             pos_y_emu=pos_y_emu,
             wrap_distances_emu=self._wrap_distances_emu(),
+            group_id=group_id,
         )
 
     def emit_wrapped_caption_anchor(
@@ -116,6 +120,7 @@ class DocxEmitterBackend:
         pos_y_emu: int,
         box_cx_emu: int,
         box_cy_emu: int,
+        group_id: int | None = None,
     ):
         return insert_wrapped_caption_anchor(
             doc,
@@ -127,7 +132,38 @@ class DocxEmitterBackend:
             box_cy_emu=box_cy_emu,
             wrap_distances_emu=self._wrap_distances_emu(),
             textbox_insets_emu=self._textbox_insets_emu(),
+            group_id=group_id,
         )
+
+    def emit_wrapped_figure_caption_group_anchor(
+        self,
+        doc,
+        *,
+        image_run,
+        caption_paragraph,
+        anchor_paragraph=None,
+        place: str | None,
+        pos_y_emu: int,
+        box_cx_emu: int,
+        box_cy_emu: int,
+        gap_emu: int,
+    ):
+        return insert_wrapped_figure_caption_group_anchor(
+            doc,
+            image_run=image_run,
+            caption_paragraph=caption_paragraph,
+            anchor_paragraph=anchor_paragraph,
+            place=place,
+            pos_y_emu=pos_y_emu,
+            box_cx_emu=box_cx_emu,
+            box_cy_emu=box_cy_emu,
+            gap_emu=gap_emu,
+            wrap_distances_emu=self._wrap_distances_emu(),
+            textbox_insets_emu=self._textbox_insets_emu(),
+        )
+
+    def reserve_wrap_group_id(self, doc) -> int:
+        return next_anchor_group_id(doc)
 
     def _wrap_distances_emu(self) -> dict[str, int]:
         def _emu(key: str, default_emu: int) -> int:
