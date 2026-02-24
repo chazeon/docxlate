@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from math import ceil
 
 from docx.oxml import OxmlElement
 from docx.oxml.ns import nsmap, qn
@@ -354,7 +355,8 @@ def insert_wrapped_figure_caption_group_anchor(
             cy = image_extent.get("cy", "0")
             if cy.isdigit():
                 # Prevent style-driven exact line spacing from clipping tall inline images.
-                spacing.set(qn("w:line"), str(max(1, int(cy) // 635)))
+                line_twips = max(1, int(ceil(int(cy) / 635.0)) + 20)
+                spacing.set(qn("w:line"), str(line_twips))
                 spacing.set(qn("w:lineRule"), "atLeast")
     image_para_pr.append(spacing)
     image_para.insert(0, image_para_pr)
@@ -362,16 +364,12 @@ def insert_wrapped_figure_caption_group_anchor(
     txbx_content.append(deepcopy(caption_paragraph._p))
 
     body_pr = OxmlElement("wps:bodyPr")
-    insets = textbox_insets_emu or {}
-    for key, attr in (
-        ("l_ins", "lIns"),
-        ("r_ins", "rIns"),
-        ("t_ins", "tIns"),
-        ("b_ins", "bIns"),
-    ):
-        if key not in insets:
-            continue
-        body_pr.set(attr, str(max(0, int(insets[key]))))
+    # Grouped mode currently favors clip-safety over custom insets.
+    body_pr.set("lIns", "0")
+    body_pr.set("rIns", "0")
+    body_pr.set("tIns", "0")
+    body_pr.set("bIns", "0")
+    body_pr.set("vertOverflow", "overflow")
     body_pr.append(OxmlElement("a:spAutoFit"))
     wsp.append(body_pr)
 

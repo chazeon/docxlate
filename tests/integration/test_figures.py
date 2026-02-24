@@ -182,7 +182,7 @@ def test_wrapfigure_distances_are_configurable(tmp_path):
         assert wrap.get(key) == value
 
 
-def test_wrapfigure_caption_textbox_insets_are_configurable(tmp_path):
+def test_wrapfigure_caption_textbox_insets_are_zeroed_in_grouped_mode(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)
 
@@ -210,10 +210,11 @@ def test_wrapfigure_caption_textbox_insets_are_configurable(tmp_path):
     root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
     ns = {"wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"}
     body_pr = root.xpath(".//wps:bodyPr", namespaces=ns)[0]
-    assert body_pr.get("lIns") == str(int(0.01 * 914400))
-    assert body_pr.get("rIns") == str(int(0.02 * 914400))
-    assert body_pr.get("tIns") == str(int(0.03 * 914400))
-    assert body_pr.get("bIns") == str(int(0.04 * 914400))
+    assert body_pr.get("lIns") == "0"
+    assert body_pr.get("rIns") == "0"
+    assert body_pr.get("tIns") == "0"
+    assert body_pr.get("bIns") == "0"
+    assert body_pr.get("vertOverflow") == "overflow"
 
 
 def test_wrapfigure_caption_textbox_uses_vertical_autofit(tmp_path):
