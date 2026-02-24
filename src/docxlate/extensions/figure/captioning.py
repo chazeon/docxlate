@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from jinja2 import Environment as JinjaEnvironment
 
+CAPTION_SLOT_TOKEN = "__DOCXLATE_CAPTION_SLOT__"
+
 def caption_template_env() -> JinjaEnvironment:
     return JinjaEnvironment(
         autoescape=False,
@@ -105,7 +107,7 @@ def render_caption_with_template(latex, node, *, plugin) -> str | None:
     template = caption_cfg.get("template") if isinstance(caption_cfg, dict) else None
     if not template:
         return None
-    slot = "__DOCXLATE_CAPTION_SLOT__"
+    slot = CAPTION_SLOT_TOKEN
     label_name = find_figure_label(latex, node)
     fig_num = resolved_label_number(latex, label_name)
     if fig_num == "?":
@@ -129,6 +131,7 @@ def render_caption_with_template(latex, node, *, plugin) -> str | None:
 
 
 __all__ = [
+    "CAPTION_SLOT_TOKEN",
     "caption_tex_from_node",
     "caption_template_env",
     "caption_template_source",

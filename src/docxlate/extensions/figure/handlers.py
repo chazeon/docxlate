@@ -5,7 +5,7 @@ from docx.shared import Pt
 
 from docxlate.model import RenderContext
 
-from .captioning import render_caption_with_template
+from .captioning import CAPTION_SLOT_TOKEN, caption_tex_from_node, render_caption_with_template
 from .geometry.image import resolve_image_path, resolve_target_width_emu
 from .geometry.wrap import wrapped_figure_box_size
 from .layout.anchor_host import trim_trailing_whitespace_runs
@@ -60,19 +60,9 @@ def register_handlers(latex, *, plugin):
         p = latex.add_paragraph_for_role("caption")
         templated = render_caption_with_template(latex, node, plugin=plugin)
         if templated is not None:
-            slot = "__DOCXLATE_CAPTION_SLOT__"
-            self_fragment = getattr(node, "attributes", {}).get("self")
-            prefix, sep, suffix = templated.partition(slot)
-            if prefix:
-                latex.render_latex_fragment(prefix, paragraph=p, style=caption_ctx)
-            with latex.render_frame(paragraph=p, style=caption_ctx):
-                if self_fragment is not None and getattr(self_fragment, "childNodes", None):
-                    latex.render_nodes(self_fragment.childNodes)
-                else:
-                    text = latex.get_arg_text(node, 0, key="self")
-                    latex.append_inline(text)
-            if sep and suffix:
-                latex.render_latex_fragment(suffix, paragraph=p, style=caption_ctx)
+            caption_tex = caption_tex_from_node(latex, node)
+            rendered = templated.replace(CAPTION_SLOT_TOKEN, caption_tex)
+            latex.render_latex_fragment(rendered, paragraph=p, style=caption_ctx)
         else:
             self_fragment = getattr(node, "attributes", {}).get("self")
             with latex.render_frame(paragraph=p, style=caption_ctx):
