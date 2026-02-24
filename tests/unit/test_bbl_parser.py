@@ -23,7 +23,7 @@ def test_format_bibliography_entry_contains_core_parts():
     assert "(2024)" in formatted
     assert "A sample article" in formatted
     assert r"\textit{J. Testing}" in formatted
-    assert "10–20" in formatted
+    assert "10-20" in formatted
     assert r"\href{https://doi.org/10.1000/example}{10.1000/example}" in formatted
 
 
@@ -69,7 +69,7 @@ def test_format_bibliography_entry_supports_custom_template():
         entry,
         template=r"<< authors|join('; ') >> :: << fields.title >>",
     )
-    assert formatted == "A, One :: My Title."
+    assert formatted == "A, One :: My Title"
 
 
 def test_format_bibliography_entry_does_not_mutate_doi_hyphens():
@@ -83,7 +83,7 @@ def test_format_bibliography_entry_does_not_mutate_doi_hyphens():
         },
     }
     formatted = format_bibliography_entry(entry)
-    assert "223–253" in formatted
+    assert "223-253" in formatted
     assert (
         r"\href{https://doi.org/10.1016/0009-2541(94)00140-4}"
         r"{10.1016/0009-2541(94)00140-4}"

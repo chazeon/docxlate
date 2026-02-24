@@ -317,26 +317,9 @@ def _bibliography_template_env() -> Environment:
 
 
 def _cleanup_bibliography_latex(text: str) -> str:
-    compact = " ".join(text.split())
-    compact = re.sub(r"\s+([,.;])", r"\1", compact)
-    # Prefer typographic en dash for numeric ranges (pages, years, etc.),
-    # but do not mutate URL/DOI targets embedded in \href or \url commands.
-    protected: dict[str, str] = {}
-
-    def _protect(match: re.Match[str]) -> str:
-        token = f"__DOCXLATE_PROTECT_{len(protected)}__"
-        protected[token] = match.group(0)
-        return token
-
-    compact = re.sub(r"\\href\{[^{}]*\}\{[^{}]*\}", _protect, compact)
-    compact = re.sub(r"\\url\{[^{}]*\}", _protect, compact)
-    # compact = re.sub(r"(?<=\d)-(?=\d)", "\u2013", compact)
-    for token, original in protected.items():
-        compact = compact.replace(token, original)
-    compact = compact.replace("( ", "(").replace(" )", ")")
-    if compact and not compact.endswith("."):
-        compact += "."
-    return compact
+    # Keep bibliography output stable with upstream biber/biblatex formatting.
+    # Only trim outer whitespace introduced by template block layout.
+    return text.strip()
 
 
 def format_bibliography_entry(
