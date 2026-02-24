@@ -19,6 +19,8 @@ def test_parse_bbl_extracts_entries_and_fields():
 def test_format_bibliography_entry_contains_core_parts():
     entries = parse_bbl(Path("tests/fixtures/bbl/sample.bbl"))
     formatted = format_bibliography_entry(entries["KeyA"])
+    assert "\n" not in formatted
+    assert "  " not in formatted
     assert "Doe, Jane, Roe, John" in formatted
     assert "(2024)" in formatted
     assert "A sample article" in formatted

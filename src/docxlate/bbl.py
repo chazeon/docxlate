@@ -288,19 +288,19 @@ def parse_bbl(fname: str | Path) -> dict[str, dict]:
 
 
 DEFAULT_BIB_TEMPLATE = r"""
-<% if authors %>
-<% if authors|length > et_al_limit %>
-<< authors[:et_al_limit]|join(", ") >>, \textit{et al.}
-<% else %>
-<< authors|join(", ") >>
-<% endif %>
-.<% endif %>
-<% if fields.year %> (<< fields.year >>).<% endif %>
-<% if fields.title %> << fields.title >>.<% endif %>
-<% if fields.journaltitle or fields.volume or fields.number or fields.pages %>
- <% if fields.journaltitle %>\textit{<< fields.journaltitle >>}<% endif %><% if fields.volume and fields.number %>, << fields.volume >>(<< fields.number >>)<% elif fields.volume %>, << fields.volume >><% endif %><% if fields.pages %>, << fields.pages >><% endif %>.
-<% endif %>
-<% if fields.doi %> DOI: \href{https://doi.org/<< fields.doi >>}{<< fields.doi >>}.<% endif %>
+<%- if authors -%>
+<%- if authors|length > et_al_limit -%>
+<<- authors[:et_al_limit]|join(", ") ->>, \textit{et al.}
+<%- else -%>
+<<- authors|join(", ") ->>
+<%- endif -%>.
+<%- endif -%>
+<%- if fields.year -%> (<<- fields.year ->>).<%- endif -%>
+<%- if fields.title -%> <<- fields.title ->>.<%- endif -%>
+<%- if fields.journaltitle or fields.volume or fields.number or fields.pages -%>
+ <%- if fields.journaltitle -%>\textit{<<- fields.journaltitle ->>}<%- endif -%><%- if fields.volume and fields.number -%>, <<- fields.volume ->>(<<- fields.number ->>)<%- elif fields.volume -%>, <<- fields.volume ->><%- endif -%><%- if fields.pages -%>, <<- fields.pages ->><%- endif -%>.
+<%- endif -%>
+<%- if fields.doi -%> DOI: \href{https://doi.org/<<- fields.doi ->>}{<<- fields.doi ->>}.<%- endif -%>
 """.strip()
 
 
