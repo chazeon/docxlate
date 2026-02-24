@@ -70,3 +70,21 @@ def test_format_bibliography_entry_supports_custom_template():
         template=r"<< authors|join('; ') >> :: << fields.title >>",
     )
     assert formatted == "A, One :: My Title."
+
+
+def test_format_bibliography_entry_does_not_mutate_doi_hyphens():
+    entry = {
+        "authors": ["A, One"],
+        "fields": {
+            "year": "2026",
+            "journaltitle": "Journal X",
+            "pages": "223-253",
+            "doi": "10.1016/0009-2541(94)00140-4",
+        },
+    }
+    formatted = format_bibliography_entry(entry)
+    assert "223–253" in formatted
+    assert (
+        r"\href{https://doi.org/10.1016/0009-2541(94)00140-4}"
+        r"{10.1016/0009-2541(94)00140-4}"
+    ) in formatted
