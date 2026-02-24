@@ -125,6 +125,7 @@ class DocxEmitterBackend:
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
             wrap_distances_emu=self._wrap_distances_emu(),
+            textbox_insets_emu=self._textbox_insets_emu(),
         )
 
     def _wrap_distances_emu(self) -> dict[str, int]:
@@ -145,6 +146,27 @@ class DocxEmitterBackend:
             "dist_b": _emu("wrapfigure_dist_bottom_in", 0),
             "dist_l": _emu("wrapfigure_dist_left_in", 114300),
             "dist_r": _emu("wrapfigure_dist_right_in", 114300),
+        }
+
+    def _textbox_insets_emu(self) -> dict[str, int]:
+        def _emu(key: str, default_emu: int) -> int:
+            value = self.context.get(key)
+            if value is None:
+                return default_emu
+            try:
+                inches = float(value)
+            except (TypeError, ValueError):
+                return default_emu
+            if inches < 0:
+                return default_emu
+            return int(Inches(inches))
+
+        # Keep conservative defaults; explicit config overrides.
+        return {
+            "l_ins": _emu("wrapfigure_textbox_inset_left_in", 0),
+            "r_ins": _emu("wrapfigure_textbox_inset_right_in", 0),
+            "t_ins": _emu("wrapfigure_textbox_inset_top_in", 0),
+            "b_ins": _emu("wrapfigure_textbox_inset_bottom_in", 0),
         }
 
     def _emit_plain_span(self, paragraph, span: TextSpan):

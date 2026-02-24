@@ -21,6 +21,11 @@ def test_validate_runtime_config_accepts_known_fields():
         "wrapfigure_dist_right_in": 0.3,
         "wrapfigure_dist_top_in": 0.05,
         "wrapfigure_dist_bottom_in": 0.06,
+        "wrapfigure_textbox_inset_left_in": 0.01,
+        "wrapfigure_textbox_inset_right_in": 0.02,
+        "wrapfigure_textbox_inset_top_in": 0.03,
+        "wrapfigure_textbox_inset_bottom_in": 0.04,
+        "wrapfigure_caption_gap_in": 0.2,
     }
     validated = validate_runtime_config(data)
     assert validated["bibliography_template"] == "<< fields.title >>"
@@ -38,6 +43,11 @@ def test_validate_runtime_config_accepts_known_fields():
     assert validated["wrapfigure_dist_right_in"] == 0.3
     assert validated["wrapfigure_dist_top_in"] == 0.05
     assert validated["wrapfigure_dist_bottom_in"] == 0.06
+    assert validated["wrapfigure_textbox_inset_left_in"] == 0.01
+    assert validated["wrapfigure_textbox_inset_right_in"] == 0.02
+    assert validated["wrapfigure_textbox_inset_top_in"] == 0.03
+    assert validated["wrapfigure_textbox_inset_bottom_in"] == 0.04
+    assert validated["wrapfigure_caption_gap_in"] == 0.2
 
 
 def test_validate_runtime_config_rejects_unknown_fields():
@@ -68,3 +78,13 @@ def test_validate_runtime_config_rejects_invalid_title_policy():
 def test_validate_runtime_config_rejects_negative_wrap_distances():
     with pytest.raises(ValidationError):
         validate_runtime_config({"wrapfigure_dist_left_in": -0.1})
+
+
+def test_validate_runtime_config_rejects_negative_textbox_insets():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrapfigure_textbox_inset_left_in": -0.1})
+
+
+def test_validate_runtime_config_rejects_negative_caption_gap():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"wrapfigure_caption_gap_in": -0.1})

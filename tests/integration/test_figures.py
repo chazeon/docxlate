@@ -183,6 +183,84 @@ def test_wrapfigure_distances_are_configurable(tmp_path):
         assert wrap.get(key) == value
 
 
+def test_wrapfigure_caption_textbox_insets_are_configurable(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["wrapfigure_textbox_inset_left_in"] = 0.01
+    latex.context["wrapfigure_textbox_inset_right_in"] = 0.02
+    latex.context["wrapfigure_textbox_inset_top_in"] = 0.03
+    latex.context["wrapfigure_textbox_inset_bottom_in"] = 0.04
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Caption" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {"wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"}
+    body_pr = root.xpath(".//wps:bodyPr", namespaces=ns)[0]
+    assert body_pr.get("lIns") == str(int(0.01 * 914400))
+    assert body_pr.get("rIns") == str(int(0.02 * 914400))
+    assert body_pr.get("tIns") == str(int(0.03 * 914400))
+    assert body_pr.get("bIns") == str(int(0.04 * 914400))
+
+
+def test_wrapfigure_caption_gap_is_configurable(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["wrapfigure_caption_gap_in"] = 0.2
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    anchor_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml
+        and ("<pic:pic" in p._element.xml or "<a:blip" in p._element.xml)
+    )
+    root = etree.fromstring(anchor_para._element.xml.encode("utf-8"))
+    ns = {
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+        "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
+    }
+    anchors = root.xpath(".//wp:anchor", namespaces=ns)
+    image_anchor = next(a for a in anchors if a.xpath(".//pic:pic", namespaces=ns))
+    caption_anchor = next(
+        a
+        for a in anchors
+        if a.xpath(
+            ".//a:graphicData[@uri='http://schemas.microsoft.com/office/word/2010/wordprocessingShape']",
+            namespaces=ns,
+        )
+    )
+    image_cy = int(image_anchor.xpath("string(.//wp:extent/@cy)", namespaces=ns))
+    caption_pos = int(caption_anchor.xpath("string(.//wp:positionV/wp:posOffset)", namespaces=ns))
+    assert caption_pos == image_cy + int(0.2 * 914400)
+
+
 def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)

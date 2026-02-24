@@ -138,6 +138,7 @@ def insert_wrapped_caption_anchor(
     box_cx_emu: int,
     box_cy_emu: int,
     wrap_distances_emu: dict[str, int] | None = None,
+    textbox_insets_emu: dict[str, int] | None = None,
 ):
     anchor = _build_common_anchor(
         place=place,
@@ -195,7 +196,18 @@ def insert_wrapped_caption_anchor(
     txbx_content = OxmlElement("w:txbxContent")
     txbx.append(txbx_content)
     txbx_content.append(deepcopy(source_paragraph._p))
-    wsp.append(OxmlElement("wps:bodyPr"))
+    body_pr = OxmlElement("wps:bodyPr")
+    insets = textbox_insets_emu or {}
+    for key, attr in (
+        ("l_ins", "lIns"),
+        ("r_ins", "rIns"),
+        ("t_ins", "tIns"),
+        ("b_ins", "bIns"),
+    ):
+        if key not in insets:
+            continue
+        body_pr.set(attr, str(max(0, int(insets[key]))))
+    wsp.append(body_pr)
 
     anchor_para = anchor_paragraph
     if anchor_para is None:

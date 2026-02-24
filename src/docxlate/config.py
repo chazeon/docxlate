@@ -23,6 +23,11 @@ class RuntimeConfig(BaseModel):
     wrapfigure_dist_right_in: float | None = Field(default=None, ge=0)
     wrapfigure_dist_top_in: float | None = Field(default=None, ge=0)
     wrapfigure_dist_bottom_in: float | None = Field(default=None, ge=0)
+    wrapfigure_textbox_inset_left_in: float | None = Field(default=None, ge=0)
+    wrapfigure_textbox_inset_right_in: float | None = Field(default=None, ge=0)
+    wrapfigure_textbox_inset_top_in: float | None = Field(default=None, ge=0)
+    wrapfigure_textbox_inset_bottom_in: float | None = Field(default=None, ge=0)
+    wrapfigure_caption_gap_in: float | None = Field(default=None, ge=0)
 
 
 def validate_runtime_config(data: dict) -> dict:

@@ -151,6 +151,19 @@ def _trim_trailing_whitespace_runs(paragraph):
         run._r.getparent().remove(run._r)
 
 
+def _caption_gap_emu(latex) -> int:
+    value = latex.context.get("wrapfigure_caption_gap_in")
+    if value is None:
+        return 114300
+    try:
+        inches = float(value)
+    except (TypeError, ValueError):
+        return 114300
+    if inches < 0:
+        return 114300
+    return int(Inches(inches))
+
+
 def _caption_template_env() -> JinjaEnvironment:
     return JinjaEnvironment(
         autoescape=False,
@@ -361,7 +374,7 @@ def register(latex):
                 source_paragraph=p,
                 anchor_paragraph=stack[-1].get("anchor_paragraph"),
                 place=stack[-1].get("place"),
-                pos_y_emu=image_cy + 114300,
+                pos_y_emu=image_cy + _caption_gap_emu(latex),
                 box_cx_emu=max(1200000, box_cx),
                 box_cy_emu=caption_cy,
             )
