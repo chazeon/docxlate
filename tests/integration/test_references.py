@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from docxlate.handlers import latex
 
@@ -117,24 +118,21 @@ def test_invalid_href_target_is_rendered_as_plain_text_without_relationship():
     assert any("Skipped invalid hyperlink target" in w for w in warnings)
 
 
-def test_bibliography_fragment_uses_main_preamble_macros():
-    latex.context["bbl_entries"] = {
-        "KeyA": {
-            "fields": {"title": "Sample Title"},
-            "authors": [],
-            "lists": {},
-            "type": "article",
-            "key": "KeyA",
-        }
-    }
-    latex.context["cite_order"] = {"KeyA": 1}
-    latex.context["bibliography_template"] = r"\mydecorate{<< fields.title >>}"
-    tex = r"""
-\newcommand{\mydecorate}[1]{PRE:#1:POST}
-\begin{document}
-Body text.
-\end{document}
-"""
-    latex.run(tex)
+def test_bibliography_e2e_from_bbl_file_handles_tokens(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyA}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyA}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        Path("tests/fixtures/bbl/sample.bbl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["bibliography_template"] = (
+        r"\textquotedblleft{}<< fields.title >>\textquotedblright{} << fields.pages >>."
+    )
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
     text = "\n".join(p.text for p in latex.doc.paragraphs)
-    assert "PRE:Sample Title:POST" in text
+    assert "“A sample article”" in text
+    assert "10--20" in text

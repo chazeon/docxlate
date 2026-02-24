@@ -59,12 +59,12 @@ class BblEntry:
         return {
             "key": self.key,
             "type": self.entry_type,
-            "fields": {k: _normalize_tex_text(v) for k, v in self.raw_fields.items()},
+            "fields": {k: _preserve_tex_text(v) for k, v in self.raw_fields.items()},
             "lists": {
-                k: [_normalize_tex_text(v) for v in values]
+                k: [_preserve_tex_text(v) for v in values]
                 for k, values in self.raw_lists.items()
             },
-            "authors": [_normalize_tex_text(a) for a in self.raw_authors],
+            "authors": [_preserve_tex_text(a) for a in self.raw_authors],
         }
 
 
@@ -130,23 +130,25 @@ def _read_braced(text: str, i: int) -> tuple[str, int]:
     return text[start:], len(text)
 
 
-def _normalize_tex_text(value: str) -> str:
+def _normalize_identifier(value: str) -> str:
+    return str(value).strip().strip("{}")
+
+
+def _preserve_tex_text(value: str) -> str:
+    # Keep TeX tokens intact so bibliography rendering can flow through the
+    # regular parser/emitter pipeline without broad lossy normalization.
+    # Normalize only known biblatex control macros into TeX-native text.
+    text = str(value).strip()
+    text = re.sub(r"\\bibrangedash\s*", "--", text)
     replacements = {
-        "\\bibrangedash": "-",
         "\\bibinitperiod": ".",
         "\\bibnamedelima": " ",
         "\\bibinitdelim": " ",
         "\\bibinithyphendelim": "-",
-        "\\textendash": "-",
-        "~": " ",
     }
-    result = value
     for src, dst in replacements.items():
-        result = result.replace(src, dst)
-    result = result.replace("{", "").replace("}", "")
-    result = " ".join(result.split())
-    result = result.replace("- ", "-").replace(" -", "-")
-    return result
+        text = text.replace(src, dst)
+    return text
 
 
 def _fragment_raw_text(value) -> str:
@@ -203,8 +205,8 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
         node_name = getattr(node, "nodeName", None)
 
         if node_name == "entry":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
-            entry_type = _normalize_tex_text(
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
+            entry_type = _normalize_identifier(
                 _fragment_raw_text(node.attributes.get("type"))
             )
             current = BblEntry(key=key, entry_type=entry_type)
@@ -225,21 +227,21 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
             continue
 
         if node_name == "field":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             value = _fragment_raw_text(node.attributes.get("value"))
             if key:
                 current.raw_fields[key] = value
             continue
 
         if node_name == "list":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             value = _fragment_raw_text(node.attributes.get("value"))
             if key:
                 current.raw_lists.setdefault(key, []).append(value)
             continue
 
         if node_name == "name":
-            role = _normalize_tex_text(_fragment_raw_text(node.attributes.get("role")))
+            role = _normalize_identifier(_fragment_raw_text(node.attributes.get("role")))
             payload = node.attributes.get("payload")
             payload_source = str(getattr(payload, "source", "") or "")
             if role == "author":
@@ -254,7 +256,7 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
 
         if node_name == "verb":
             source_text = str(getattr(node, "source", "") or "")
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             if source_text.startswith("\\verb{") and key:
                 verb_capture.start_key(key)
             elif verb_capture.field_key:

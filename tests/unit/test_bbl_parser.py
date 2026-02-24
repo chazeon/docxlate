@@ -11,7 +11,7 @@ def test_parse_bbl_extracts_entries_and_fields():
     key_a = entries["KeyA"]
     assert key_a["type"] == "article"
     assert key_a["fields"]["title"] == "A sample article"
-    assert key_a["fields"]["pages"] == "10-20"
+    assert key_a["fields"]["pages"] == "10--20"
     assert key_a["fields"]["doi"] == "10.1000/example"
     assert key_a["authors"][:2] == ["Doe, Jane", "Roe, John"]
 
@@ -25,7 +25,7 @@ def test_format_bibliography_entry_contains_core_parts():
     assert "(2024)" in formatted
     assert "A sample article" in formatted
     assert r"\textit{J. Testing}" in formatted
-    assert "10-20" in formatted
+    assert "10--20" in formatted
     assert r"\href{https://doi.org/10.1000/example}{10.1000/example}" in formatted
 
 
@@ -90,3 +90,23 @@ def test_format_bibliography_entry_does_not_mutate_doi_hyphens():
         r"\href{https://doi.org/10.1016/0009-2541(94)00140-4}"
         r"{10.1016/0009-2541(94)00140-4}"
     ) in formatted
+
+
+def test_parse_bbl_preserves_tex_tokens_in_field_values(tmp_path):
+    bbl = tmp_path / "tokens.bbl"
+    bbl.write_text(
+        r"""
+\refsection{0}
+\entry{KeyTok}{article}{}
+\field{title}{CO$_2$ and \textit{A\_B}}
+\field{url}{https://example.com/a-b}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+    entries = parse_bbl(bbl)
+    title = entries["KeyTok"]["fields"]["title"]
+    assert r"CO$_2$" in title
+    assert r"\textit{" in title
+    assert r"\_" in title
