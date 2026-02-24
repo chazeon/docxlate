@@ -4,6 +4,7 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from docxlate.docx_ext.floating import (
+    insert_wrapped_figure_caption_group_anchor,
     convert_inline_drawing_to_wrapped_anchor,
     insert_wrapped_caption_anchor,
     next_anchor_group_id,
@@ -57,3 +58,31 @@ def test_convert_inline_anchor_tags_group_membership(tmp_path):
     assert anchor is not None
     assert "docxlate-wrap-group:12:image" in para._element.xml
     assert next_anchor_group_id(doc) == 13
+
+
+def test_group_anchor_image_paragraph_sets_at_least_line_height(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    doc = Document()
+    host = doc.add_paragraph("Host")
+    image_para = doc.add_paragraph()
+    image_run = image_para.add_run()
+    image_run.add_picture(str(image_path))
+    caption_para = doc.add_paragraph("Caption")
+
+    insert_wrapped_figure_caption_group_anchor(
+        doc,
+        image_run=image_run,
+        caption_paragraph=caption_para,
+        anchor_paragraph=host,
+        place="r",
+        pos_y_emu=0,
+        box_cx_emu=1200000,
+        box_cy_emu=1200000,
+        gap_emu=114300,
+    )
+
+    xml = host._element.xml
+    assert 'w:lineRule="atLeast"' in xml
+    assert 'w:line="' in xml

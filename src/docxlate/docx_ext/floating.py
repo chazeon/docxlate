@@ -347,6 +347,15 @@ def insert_wrapped_figure_caption_group_anchor(
     image_para_pr = OxmlElement("w:pPr")
     spacing = OxmlElement("w:spacing")
     spacing.set(qn("w:after"), str(max(0, int(gap_emu)) // 635))
+    inline_copy = image_run_copy.find(qn("w:drawing") + "/" + qn("wp:inline"))
+    if inline_copy is not None:
+        image_extent = inline_copy.find(qn("wp:extent"))
+        if image_extent is not None:
+            cy = image_extent.get("cy", "0")
+            if cy.isdigit():
+                # Prevent style-driven exact line spacing from clipping tall inline images.
+                spacing.set(qn("w:line"), str(max(1, int(cy) // 635)))
+                spacing.set(qn("w:lineRule"), "atLeast")
     image_para_pr.append(spacing)
     image_para.insert(0, image_para_pr)
     txbx_content.append(image_para)
