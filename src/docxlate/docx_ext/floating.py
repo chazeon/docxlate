@@ -207,6 +207,8 @@ def insert_wrapped_caption_anchor(
         if key not in insets:
             continue
         body_pr.set(attr, str(max(0, int(insets[key]))))
+    # Keep caption width fixed and let Word grow the box vertically as needed.
+    body_pr.append(OxmlElement("a:spAutoFit"))
     wsp.append(body_pr)
 
     anchor_para = anchor_paragraph

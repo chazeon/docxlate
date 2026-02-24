@@ -217,6 +217,35 @@ def test_wrapfigure_caption_textbox_insets_are_configurable(tmp_path):
     assert body_pr.get("bIns") == str(int(0.04 * 914400))
 
 
+def test_wrapfigure_caption_textbox_uses_vertical_autofit(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption that should auto-grow the text box vertically when needed.}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Caption" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    }
+    assert root.xpath(".//wps:bodyPr/a:spAutoFit", namespaces=ns)
+
+
 def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)
