@@ -328,10 +328,13 @@ def register(latex):
             inline = drawing.find(qn("wp:inline")) if drawing is not None else None
             extent = inline.find(qn("wp:extent")) if inline is not None else None
             if extent is not None and stack:
+                rendered_cx = int(extent.get("cx", "0"))
+                rendered_cy = int(extent.get("cy", "0"))
                 stack[-1]["image_run"] = run
-                stack[-1]["image_cx_emu"] = int(extent.get("cx", "0"))
-                stack[-1]["image_cy_emu"] = int(extent.get("cy", "0"))
-                stack[-1]["target_cx_emu"] = target_width_emu
+                stack[-1]["image_cx_emu"] = rendered_cx
+                stack[-1]["image_cy_emu"] = rendered_cy
+                # Keep group width synced with actual rendered picture width.
+                stack[-1]["target_cx_emu"] = rendered_cx if rendered_cx > 0 else target_width_emu
 
     @latex.command("caption", inline=True)
     def handle_caption(node):
@@ -364,7 +367,7 @@ def register(latex):
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_cx = int(stack[-1].get("image_cx_emu", 2160000))
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
-            box_cx = int(stack[-1].get("target_cx_emu", image_cx))
+            box_cx = max(image_cx, int(stack[-1].get("target_cx_emu", image_cx)))
             image_run = stack[-1].get("image_run")
             caption_cy = _estimate_caption_box_height_emu(p.text, box_cx)
             gap_emu = _caption_gap_emu(latex)
