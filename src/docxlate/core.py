@@ -157,6 +157,8 @@ class LatexBridge:
                 tex.ownerDocument.context.addGlobal(macro_name, macro_class)
             tex.input(parse_source)
             parsed = tex.parse()
+            macro_ctx = tex.ownerDocument.context.contexts[-1]
+            self.context["_parse_macro_context"] = dict(macro_ctx)
         except Exception as exc:
             parse_error = exc
 
@@ -170,10 +172,13 @@ class LatexBridge:
                             macro_name, macro_class
                         )
                     fallback_tex.input(body)
+                    fallback_parsed = fallback_tex.parse()
+                    macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
+                    self.context["_parse_macro_context"] = dict(macro_ctx)
                     self.context.setdefault("warnings", []).append(
                         f"Full LaTeX parse failed ({type(parse_error).__name__}); used body-only parse fallback."
                     )
-                    return fallback_tex.parse()
+                    return fallback_parsed
             raise parse_error
 
         if self._looks_like_preamble_only(parsed) and "\\begin{document}" in parse_source:
@@ -183,10 +188,13 @@ class LatexBridge:
                 for macro_name, macro_class in self.macro_handlers.items():
                     fallback_tex.ownerDocument.context.addGlobal(macro_name, macro_class)
                 fallback_tex.input(body)
+                fallback_parsed = fallback_tex.parse()
+                macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
+                self.context["_parse_macro_context"] = dict(macro_ctx)
                 self.context.setdefault("warnings", []).append(
                     "Full LaTeX parse produced no document body; used body-only parse fallback."
                 )
-                return fallback_tex.parse()
+                return fallback_parsed
         return parsed
 
     def _sanitize_source_for_parse(self, tex_source: str) -> str:
@@ -373,6 +381,9 @@ class LatexBridge:
         from plasTeX.TeX import TeX
 
         tex = TeX()
+        macro_context = self.context.get("_parse_macro_context")
+        if isinstance(macro_context, dict):
+            tex.ownerDocument.context.importMacros(macro_context)
         for macro_name, macro_class in self.macro_handlers.items():
             tex.ownerDocument.context.addGlobal(macro_name, macro_class)
         tex.input(tex_source)

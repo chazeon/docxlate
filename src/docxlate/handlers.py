@@ -35,9 +35,15 @@ class Needspace(Command):
     args = "len:str"
 
 
+class DocxlateBibEntry(Command):
+    macroName = "docxlatebibentry"
+    args = "idx:str self"
+
+
 latex.macro("and", And)
 latex.macro("color", Color)
 latex.macro("Needspace", Needspace)
+latex.macro("docxlatebibentry", DocxlateBibEntry)
 
 
 def _bibliography_layout_settings() -> dict:
@@ -485,6 +491,45 @@ def handle_cite(node):
     latex.append_inline("]")
 
 
+@latex.command("docxlatebibentry", inline=True)
+def handle_docxlate_bib_entry(node):
+    idx_text = latex.get_arg_text(node, 0, key="idx")
+    try:
+        idx = int(idx_text)
+    except (TypeError, ValueError):
+        return
+
+    ordered_keys = latex.context.get("_bib_render_order", [])
+    if idx < 0 or idx >= len(ordered_keys):
+        return
+    key = ordered_keys[idx]
+    cite_order = latex.context.get("_bib_render_cite_order", {})
+    layout = latex.context.get("_bib_render_layout") or _bibliography_layout_settings()
+
+    p = latex.add_paragraph_for_role("bibliography")
+    if layout["numbering"] == "bracket":
+        indent = Inches(layout["indent_in"])
+        p.paragraph_format.left_indent = indent
+        p.paragraph_format.first_line_indent = -indent
+        p.paragraph_format.tab_stops.add_tab_stop(indent)
+        ref_num = _reference_number_for_key(key, idx, cite_order)
+        p.add_run(f"[{ref_num}]\t")
+
+    text_fragment = getattr(node, "attributes", {}).get("self")
+    if text_fragment is not None and getattr(text_fragment, "childNodes", None):
+        with latex.render_frame(paragraph=p):
+            latex.render_nodes(text_fragment.childNodes)
+
+    resolver = getattr(latex, "reference_resolver", None)
+    if resolver is not None:
+        label_name = f"bib:{key}"
+        current = latex._current_paragraph
+        latex._current_paragraph = p
+        resolver.register_label(latex, label_name)
+        latex._current_paragraph = current
+        latex.context.setdefault("bib_entry_labels", {})[key] = label_name
+
+
 @latex.on("load")
 def on_load(tex_source, soup):
     """Parse .aux data for citation handling when available."""
@@ -561,37 +606,32 @@ def append_references():
     with latex.render_frame(paragraph=heading):
         latex.append_inline("References", style={"bold": True, "theme": "major"})
     latex.mark_next_body_paragraph_first()
-    resolver = getattr(latex, "reference_resolver", None)
     latex.context["bib_entry_labels"] = {}
     layout = _bibliography_layout_settings()
+    bib_template = latex.context.get("bibliography_template")
+    try:
+        et_al_limit = int(latex.context.get("bibliography_et_al_limit", 3))
+    except (TypeError, ValueError):
+        et_al_limit = 3
 
+    chunks: list[str] = []
     for index, key in enumerate(ordered_keys):
-        bib_template = latex.context.get("bibliography_template")
-        try:
-            et_al_limit = int(latex.context.get("bibliography_et_al_limit", 3))
-        except (TypeError, ValueError):
-            et_al_limit = 3
         text = format_bibliography_entry(
             entries[key],
             template=bib_template,
             et_al_limit=et_al_limit,
         )
-        p = latex.add_paragraph_for_role("bibliography")
-        if layout["numbering"] == "bracket":
-            indent = Inches(layout["indent_in"])
-            p.paragraph_format.left_indent = indent
-            p.paragraph_format.first_line_indent = -indent
-            p.paragraph_format.tab_stops.add_tab_stop(indent)
-            ref_num = _reference_number_for_key(key, index, cite_order)
-            p.add_run(f"[{ref_num}]\t")
-        latex.render_latex_fragment(text, paragraph=p)
-        if resolver is not None:
-            label_name = f"bib:{key}"
-            current = latex._current_paragraph
-            latex._current_paragraph = p
-            resolver.register_label(latex, label_name)
-            latex._current_paragraph = current
-            latex.context["bib_entry_labels"][key] = label_name
+        chunks.append(rf"\docxlatebibentry{{{index}}}{{{text}}}")
+
+    latex.context["_bib_render_order"] = ordered_keys
+    latex.context["_bib_render_layout"] = layout
+    latex.context["_bib_render_cite_order"] = cite_order
+    try:
+        latex.render_latex_fragment("\n".join(chunks))
+    finally:
+        latex.context.pop("_bib_render_order", None)
+        latex.context.pop("_bib_render_layout", None)
+        latex.context.pop("_bib_render_cite_order", None)
 
 
 @latex.command("$", inline=True)

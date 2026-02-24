@@ -135,4 +135,25 @@ def test_bibliography_e2e_from_bbl_file_handles_tokens(tmp_path):
 
     text = "\n".join(p.text for p in latex.doc.paragraphs)
     assert "“A sample article”" in text
-    assert "10--20" in text
+    assert "10–20" in text
+    bib_para = next(p for p in latex.doc.paragraphs if "A sample article" in p.text)
+    bib_xml = bib_para._element.xml
+    assert "“" in bib_xml
+    assert "”" in bib_xml
+
+
+def test_bibliography_template_raw_tex_quotes_e2e(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyA}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyA}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        Path("tests/fixtures/bbl/sample.bbl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["bibliography_template"] = r"``<< fields.title >>''."
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "“A sample article”." in text
