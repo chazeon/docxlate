@@ -256,6 +256,38 @@ def test_wrapfigure_caption_textbox_uses_vertical_autofit(tmp_path):
     assert root.xpath(".//wps:bodyPr/a:spAutoFit", namespaces=ns)
 
 
+def test_wrapfigure_caption_template_preserves_spaces_in_textbox(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
+    }
+    latex.context["refs"] = {"fig:demo": {"ref_num": "9"}}
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Alpha beta \textit{{gamma}} delta}}
+\label{{fig:demo}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Alpha" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    joined_text = "".join(root.xpath(".//w:t/text()", namespaces=ns))
+    assert "Alpha beta gamma delta" in joined_text
+
+
 def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)
