@@ -73,6 +73,7 @@ class DocxEmitterBackend:
             xsl_path=xsl_path,
             color=spec.color,
             display=spec.display,
+            style=spec.style,
         )
         if not ok and not xsl_path:
             self._warn_missing_math_xsl()

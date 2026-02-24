@@ -59,6 +59,15 @@ class LatexBridge:
         self._inline_styles = {
             "textbf": {"bold": True},
             "textit": {"italic": True},
+            "textup": {"italic": False},
+            "textmd": {"bold": False},
+            "textsl": {"italic": True},
+            "textnormal": {
+                "bold": False,
+                "italic": False,
+                "small_caps": False,
+                "monospace": False,
+            },
             "emph": {"italic": True},
             "textsc": {"small_caps": True},
             "texttt": {"monospace": True},
@@ -66,6 +75,7 @@ class LatexBridge:
         self._declaration_styles = {
             "bfseries": {"bold": True},
             "itshape": {"italic": True},
+            "slshape": {"italic": True},
             "scshape": {"small_caps": True},
             "ttfamily": {"monospace": True},
             "upshape": {"italic": False},
@@ -677,7 +687,13 @@ class LatexBridge:
             self._append_text(latex_str, fallback_style, context=RenderContext())
             return
         self.emitter.emit_equation(
-            paragraph, EquationSpec(latex=latex_str, color=active_color, display=False)
+            paragraph,
+            EquationSpec(
+                latex=latex_str,
+                color=active_color,
+                display=False,
+                style=self._active_render_context().style,
+            ),
         )
 
     def emit_equation(
@@ -702,6 +718,7 @@ class LatexBridge:
                 number=number,
                 color=active_color,
                 display=True,
+                style=self._active_render_context().style,
             ),
         )
         return paragraph

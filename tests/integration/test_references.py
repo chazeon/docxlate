@@ -100,6 +100,16 @@ def test_href_bold_equivalent_for_both_nesting_orders():
     assert xml.count("<w:b/>") + xml.count("<w:b ") >= 2
 
 
+def test_href_mdseries_emits_explicit_bold_reset_in_bold_scope():
+    latex.run(r"{\bfseries \href{https://example.com}{{\mdseries Link}}}")
+
+    para = latex.doc.paragraphs[0]
+    assert "Link" in para.text
+    xml = para._element.xml
+    assert "w:hyperlink" in xml
+    assert '<w:b w:val="0"' in xml
+
+
 def test_nested_hyperlinks_raise_error():
     with pytest.raises(RuntimeError, match="Nested hyperlinks are not supported"):
         latex.run(r"\href{https://a.example}{Outer \href{https://b.example}{Inner}}")

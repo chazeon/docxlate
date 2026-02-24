@@ -396,12 +396,13 @@ def handle_paragraph(node):
         else:
             title = latex.get_arg_text(node, 0, key="title")
             latex.append_inline(title, style={"bold": True, "theme": "major"})
-        latex.append_inline(" ", style={"bold": True, "theme": "major"})
+        # Force body back to regular weight even if paragraph style is bold.
+        latex.append_inline(" ", style={"bold": False, "italic": False})
         # The paragraph body frequently begins with a whitespace text node
         # due to source line breaks; consume one to avoid double spaces.
         latex.context["_trim_next_leading_space_once"] = True
         latex.context["_preserve_paragraph_once"] = True
-        latex.render_nodes(node.childNodes)
+        latex.render_nodes(node.childNodes, style={"bold": False, "italic": False})
 
 
 @latex.env("equation")

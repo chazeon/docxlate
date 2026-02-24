@@ -4,6 +4,7 @@ from docx.shared import RGBColor
 from lxml import etree
 import latex2mathml.converter
 from pathlib import Path
+from docxlate.model import StyleState
 
 MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
 OMML_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/math"
@@ -39,6 +40,7 @@ def inject_omml(
     xsl_path: str | Path | None = None,
     color: str | None = None,
     display: bool = False,
+    style: StyleState | None = None,
 ):
     """Bridge LaTeX math to Word Math (OMML) via the provided stylesheet."""
     try:
@@ -46,6 +48,7 @@ def inject_omml(
         mathml_element = etree.fromstring(mathml.encode("utf-8"))
         if not xsl_path:
             run = paragraph.add_run(mathml)
+            _apply_text_run_style(run, style)
             _apply_text_run_color(run, color)
             return False
         transform = _get_mathml_to_omml_transform(xsl_path)
@@ -67,9 +70,11 @@ def inject_omml(
         # Fallback to MathML text for inspection instead of opaque error tags.
         try:
             run = paragraph.add_run(latex2mathml.converter.convert(latex_str))
+            _apply_text_run_style(run, style)
             _apply_text_run_color(run, color)
         except Exception:
             run = paragraph.add_run(latex_str)
+            _apply_text_run_style(run, style)
             _apply_text_run_color(run, color)
         return False
 
@@ -95,6 +100,20 @@ def _apply_text_run_color(run, color: str | None) -> None:
         run.font.color.rgb = RGBColor.from_string(color)
     except Exception:
         return
+
+
+def _apply_text_run_style(run, style: StyleState | None) -> None:
+    if style is None:
+        return
+    apply_theme_font(run, style.theme or "minor")
+    if style.monospace:
+        run.font.name = "Courier New"
+    if style.bold is not None:
+        run.bold = style.bold
+    if style.italic is not None:
+        run.italic = style.italic
+    if style.small_caps is not None:
+        run.font.small_caps = style.small_caps
 
 
 def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:

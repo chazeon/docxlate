@@ -6,10 +6,10 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class StyleState:
     theme: str = "minor"
-    bold: bool = False
-    italic: bool = False
-    small_caps: bool = False
-    monospace: bool = False
+    bold: bool | None = None
+    italic: bool | None = None
+    small_caps: bool | None = None
+    monospace: bool | None = None
     color: str | None = None
 
 
@@ -43,3 +43,4 @@ class EquationSpec:
     number: str | None = None
     color: str | None = None
     display: bool = True
+    style: StyleState | None = None

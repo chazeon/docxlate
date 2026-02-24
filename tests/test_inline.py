@@ -31,6 +31,36 @@ def test_inline_styles_emit_runs():
     assert italic_runs
 
 
+def test_textup_clears_italic_within_textit_scope():
+    _reset_router()
+    latex.run(r"{\textit{A \textup{B} C}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.italic for run in runs)
+    assert any("B" in run.text and not run.italic for run in runs)
+    assert any("C" in run.text and run.italic for run in runs)
+
+
+def test_textmd_clears_bold_within_textbf_scope():
+    _reset_router()
+    latex.run(r"{\textbf{A \textmd{B} C}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.bold for run in runs)
+    assert any("B" in run.text and not run.bold for run in runs)
+    assert any("C" in run.text and run.bold for run in runs)
+
+
+def test_textnormal_clears_bold_and_italic_in_styled_scope():
+    _reset_router()
+    latex.run(r"{\textbf{\textit{A \textnormal{B} C}}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.bold and run.italic for run in runs)
+    assert any("B" in run.text and not run.bold and not run.italic for run in runs)
+    assert any("C" in run.text and run.bold and run.italic for run in runs)
+
+
 def test_cite_produces_inline_reference():
     _reset_router()
     latex.context['cite_order'] = {"Foo2025": 7}

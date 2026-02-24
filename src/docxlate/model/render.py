@@ -68,7 +68,9 @@ class SpanCompositor:
         return TextSpan(text=text, style=ctx.style, char_role=ctx.char_role)
 
 
-def _pick_bool(delta: Mapping[str, object], key: str, fallback: bool) -> bool:
+def _pick_bool(
+    delta: Mapping[str, object], key: str, fallback: bool | None
+) -> bool | None:
     if key not in delta or delta.get(key) is None:
         return fallback
     return bool(delta.get(key))
