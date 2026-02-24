@@ -147,9 +147,13 @@ def test_wrapfigure_distances_are_configurable(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["image"] = {
-        "wrap": {
-            "pad": {"left": 0.2, "right": 0.3, "top": 0.05, "bottom": 0.06},
+    latex.context["plugins"] = {
+        "figure": {
+            "image": {
+                "wrap": {
+                    "pad": {"left": 0.2, "right": 0.3, "top": 0.05, "bottom": 0.06},
+                }
+            }
         }
     }
 
@@ -190,9 +194,13 @@ def test_wrapfigure_caption_textbox_insets_are_zeroed_in_grouped_mode(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["image"] = {
-        "wrap": {
-            "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+    latex.context["plugins"] = {
+        "figure": {
+            "image": {
+                "wrap": {
+                    "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+                }
+            }
         }
     }
 
@@ -255,7 +263,7 @@ def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     tex_path = tmp_path / "doc.tex"
     tex_path.write_text("dummy")
     latex.context["tex_path"] = str(tex_path)
-    latex.context["image"] = {"wrap": {"gap": 0.2}}
+    latex.context["plugins"] = {"figure": {"image": {"wrap": {"gap": 0.2}}}}
 
     tex = rf"""
 \begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
@@ -341,7 +349,9 @@ Body after wrap.
 
 
 def test_caption_template_renders_number_and_caption_text():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption_template": r"\textbf{Figure. << x >>} << caption >>"}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "12"}}
     latex.run(r"\begin{figure}\caption{Cap \textit{alpha}}\label{fig:demo}\end{figure}")
 
@@ -353,7 +363,9 @@ def test_caption_template_renders_number_and_caption_text():
 
 
 def test_caption_template_accepts_double_curly_placeholders():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. {{x}}} {{caption}}"
+    latex.context["plugins"] = {
+        "figure": {"caption_template": r"\textbf{Figure. {{x}}} {{caption}}"}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "7"}}
     latex.run(r"\begin{figure}\caption{Gamma}\label{fig:demo}\end{figure}")
 
@@ -363,7 +375,9 @@ def test_caption_template_accepts_double_curly_placeholders():
 
 
 def test_caption_template_uses_unknown_number_when_unresolved():
-    latex.context["figure_caption_template"] = r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption_template": r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"}
+    }
     latex.run(r"\begin{figure}\caption{Delta}\label{fig:demo}\end{figure}")
 
     para = next((p for p in latex.doc.paragraphs if "Figure. ?" in p.text), None)
@@ -372,7 +386,9 @@ def test_caption_template_uses_unknown_number_when_unresolved():
 
 
 def test_caption_template_keeps_caption_spacing_and_inline_formatting():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption_template": r"\textbf{Figure. << x >>} << caption >>"}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "3"}}
     latex.run(
         r"\begin{figure}\caption{Alpha beta \textit{gamma} delta}\label{fig:demo}\end{figure}"

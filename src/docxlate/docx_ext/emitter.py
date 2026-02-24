@@ -178,7 +178,14 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
-        image_cfg = self.context.get("image")
+        image_cfg = None
+        plugins = self.context.get("plugins")
+        if isinstance(plugins, Mapping):
+            figure_cfg = plugins.get("figure")
+            if isinstance(figure_cfg, Mapping):
+                candidate = figure_cfg.get("image")
+                if isinstance(candidate, Mapping):
+                    image_cfg = candidate
         wrap_cfg = None
         if isinstance(image_cfg, Mapping):
             candidate = image_cfg.get("wrap")
@@ -230,7 +237,14 @@ class DocxEmitterBackend:
                 return default_emu
             return int(Inches(inches))
 
-        image_cfg = self.context.get("image")
+        image_cfg = None
+        plugins = self.context.get("plugins")
+        if isinstance(plugins, Mapping):
+            figure_cfg = plugins.get("figure")
+            if isinstance(figure_cfg, Mapping):
+                candidate = figure_cfg.get("image")
+                if isinstance(candidate, Mapping):
+                    image_cfg = candidate
         wrap_cfg = None
         if isinstance(image_cfg, Mapping):
             candidate = image_cfg.get("wrap")

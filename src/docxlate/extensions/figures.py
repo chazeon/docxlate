@@ -22,6 +22,29 @@ class wrapfigure(Environment):
     args = "[ lines ] place:str width"
 
 
+def _figure_plugin_config(latex) -> dict | None:
+    plugins = latex.context.get("plugins")
+    if not isinstance(plugins, dict):
+        return None
+    cfg = plugins.get("figure")
+    if not isinstance(cfg, dict):
+        return None
+    return cfg
+
+
+def _figure_image_wrap_config(latex) -> dict | None:
+    figure_cfg = _figure_plugin_config(latex)
+    if not isinstance(figure_cfg, dict):
+        return None
+    image_cfg = figure_cfg.get("image")
+    if not isinstance(image_cfg, dict):
+        return None
+    wrap_cfg = image_cfg.get("wrap")
+    if not isinstance(wrap_cfg, dict):
+        return None
+    return wrap_cfg
+
+
 def _resolve_image_path(latex, raw_path: str) -> Path | None:
     if not raw_path:
         return None
@@ -153,13 +176,9 @@ def _trim_trailing_whitespace_runs(paragraph):
 
 def _caption_gap_emu(latex) -> int:
     value = None
-    image_cfg = latex.context.get("image")
-    if isinstance(image_cfg, dict):
-        wrap_cfg = image_cfg.get("wrap")
-        if isinstance(wrap_cfg, dict):
-            value = wrap_cfg.get("gap")
-            if value is None:
-                value = wrap_cfg.get("gap_in")
+    wrap_cfg = _figure_image_wrap_config(latex)
+    if isinstance(wrap_cfg, dict):
+        value = wrap_cfg.get("gap")
     if value is None:
         return 114300
     try:
@@ -173,18 +192,11 @@ def _caption_gap_emu(latex) -> int:
 
 def _wrap_offset_y_emu(latex) -> int:
     value = None
-    image_cfg = latex.context.get("image")
-    if isinstance(image_cfg, dict):
-        wrap_cfg = image_cfg.get("wrap")
-        if isinstance(wrap_cfg, dict):
-            shift = wrap_cfg.get("shift")
-            if isinstance(shift, dict):
-                value = shift.get("y")
-            if value is None:
-                # Backward-compatible alias.
-                offset = wrap_cfg.get("offset")
-                if isinstance(offset, dict):
-                    value = offset.get("y")
+    wrap_cfg = _figure_image_wrap_config(latex)
+    if isinstance(wrap_cfg, dict):
+        shift = wrap_cfg.get("shift")
+        if isinstance(shift, dict):
+            value = shift.get("y")
     if value is None:
         return 0
     try:
@@ -292,7 +304,8 @@ def _figure_number_from_node(node) -> str | None:
 
 
 def _render_caption_with_template(latex, node) -> str | None:
-    template = latex.context.get("figure_caption_template")
+    figure_cfg = _figure_plugin_config(latex)
+    template = figure_cfg.get("caption_template") if isinstance(figure_cfg, dict) else None
     if not template:
         return None
     slot = "__DOCXLATE_CAPTION_SLOT__"

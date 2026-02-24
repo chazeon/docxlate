@@ -191,7 +191,7 @@ def convert_main(tex_path, output, template, config, styles_xml):
                 raise ValueError("YAML config must be a mapping at top level")
             try:
                 latex.context.update(validate_runtime_config(loaded))
-            except ValidationError as exc:
+            except (ValidationError, ValueError) as exc:
                 raise click.ClickException(f"Invalid config at {config_path}: {exc}") from exc
 
         latex.context['tex_path'] = tex_path  # Store the path for potential .aux loading in handlers
