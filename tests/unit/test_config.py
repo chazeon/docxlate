@@ -20,6 +20,7 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
                 "macro_replacements": {"bibinitperiod": "·"},
                 "citation_compress_ranges": True,
                 "citation_range_min_run": 3,
+                "missing_entry_policy": "hole",
             },
             "figure": {
                 "caption": {"template": r"\textbf{Figure. << x >>} << caption >>"},
@@ -43,6 +44,7 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     assert validated["plugins"]["bibliography"]["macro_replacements"]["bibinitperiod"] == "·"
     assert validated["plugins"]["bibliography"]["citation_compress_ranges"] is True
     assert validated["plugins"]["bibliography"]["citation_range_min_run"] == 3
+    assert validated["plugins"]["bibliography"]["missing_entry_policy"] == "hole"
     assert validated["title_render_policy"] == "auto"
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
@@ -112,6 +114,11 @@ def test_validate_runtime_config_rejects_non_string_bibliography_macro_replaceme
 def test_validate_runtime_config_rejects_small_citation_min_run():
     with pytest.raises(ValidationError):
         validate_runtime_config({"plugins": {"bibliography": {"citation_range_min_run": 1}}})
+
+
+def test_validate_runtime_config_rejects_omit_missing_entry_policy():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"plugins": {"bibliography": {"missing_entry_policy": "omit"}}})
 
 
 def test_validate_runtime_config_rejects_invalid_title_policy():

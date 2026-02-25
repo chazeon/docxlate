@@ -15,6 +15,7 @@ class BibliographyConfig(BaseModel):
     macro_replacements: dict[str, str] | None = None
     citation_compress_ranges: bool | None = None
     citation_range_min_run: int | None = Field(default=None, gt=1)
+    missing_entry_policy: Literal["hole", "key"] | None = None
 
 
 __all__ = ["BibliographyConfig"]

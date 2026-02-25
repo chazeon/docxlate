@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docx.shared import Inches
+from docx.shared import Inches, RGBColor
 from plasTeX import Command
 
 from docxlate.aux import parse_abx_aux_cite_order, parse_refs
@@ -154,6 +154,9 @@ def register(latex, *, plugin):
         key = ordered_keys[idx]
         cite_order = latex.context.get("_bib_render_cite_order", {})
         layout = latex.context.get("_bib_render_layout") or plugin.layout_settings(latex)
+        missing_keys = set(latex.context.get("_bib_missing_keys", set()))
+        missing_policy = str(latex.context.get("_bib_missing_policy", "key"))
+        is_missing = key in missing_keys
 
         p = latex.add_paragraph_for_role("bibliography")
         if layout["numbering"] == "bracket":
@@ -162,12 +165,20 @@ def register(latex, *, plugin):
             p.paragraph_format.first_line_indent = -indent
             p.paragraph_format.tab_stops.add_tab_stop(indent)
             ref_num = _reference_number_for_key(key, idx, cite_order)
-            p.add_run(f"[{ref_num}]\t")
+            number_run = p.add_run(f"[{ref_num}]\t")
+            if is_missing:
+                number_run.bold = True
+                number_run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
 
-        text_fragment = getattr(node, "attributes", {}).get("self")
-        if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-            with latex.render_frame(paragraph=p):
-                latex.render_nodes(text_fragment.childNodes)
+        if is_missing and missing_policy == "key":
+            missing_run = p.add_run(key)
+            missing_run.bold = True
+            missing_run.font.color.rgb = RGBColor(0xCC, 0x00, 0x00)
+        else:
+            text_fragment = getattr(node, "attributes", {}).get("self")
+            if text_fragment is not None and getattr(text_fragment, "childNodes", None):
+                with latex.render_frame(paragraph=p):
+                    latex.render_nodes(text_fragment.childNodes)
 
         resolver = getattr(latex, "reference_resolver", None)
         if resolver is not None:
@@ -202,16 +213,15 @@ def register(latex, *, plugin):
     @latex.on("post_process")
     def append_references():
         entries = latex.context.get("bbl_entries", {})
-        if not entries:
+        cite_order = latex.context.get("cite_order", {})
+        missing_policy = plugin.missing_entry_policy(latex)
+
+        if not entries and not cite_order:
             return
 
-        cite_order = latex.context.get("cite_order", {})
         if cite_order:
-            ordered_keys = [
-                k
-                for k, _ in sorted(cite_order.items(), key=lambda item: item[1])
-                if k in entries
-            ]
+            ordered_by_cite = [k for k, _ in sorted(cite_order.items(), key=lambda item: item[1])]
+            ordered_keys = ordered_by_cite
         else:
             ordered_keys = sorted(entries.keys())
         if not ordered_keys:
@@ -227,23 +237,35 @@ def register(latex, *, plugin):
         et_al_limit = plugin.et_al_limit(latex)
 
         chunks: list[str] = []
+        missing_keys: set[str] = set()
         for index, key in enumerate(ordered_keys):
-            text = format_bibliography_entry(
-                entries[key],
-                template=bib_template,
-                et_al_limit=et_al_limit,
-            )
+            if key in entries:
+                text = format_bibliography_entry(
+                    entries[key],
+                    template=bib_template,
+                    et_al_limit=et_al_limit,
+                )
+            else:
+                latex.context.setdefault("warnings", []).append(
+                    f"Missing bibliography entry in .bbl: {key}"
+                )
+                missing_keys.add(key)
+                text = key if missing_policy == "key" else ""
             chunks.append(rf"\docxlatebibentry{{{index}}}{{{text}}}")
 
         latex.context["_bib_render_order"] = ordered_keys
         latex.context["_bib_render_layout"] = layout
         latex.context["_bib_render_cite_order"] = cite_order
+        latex.context["_bib_missing_keys"] = missing_keys
+        latex.context["_bib_missing_policy"] = missing_policy
         try:
             latex.render_latex_fragment("\n".join(chunks))
         finally:
             latex.context.pop("_bib_render_order", None)
             latex.context.pop("_bib_render_layout", None)
             latex.context.pop("_bib_render_cite_order", None)
+            latex.context.pop("_bib_missing_keys", None)
+            latex.context.pop("_bib_missing_policy", None)
 
     return None
 

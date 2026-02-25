@@ -98,6 +98,66 @@ def test_references_section_appended_from_bbl(tmp_path):
     assert 'w:anchor="ref_bib_KeyA"' in xml or 'w:anchor="ref_bib_KeyB"' in xml
 
 
+def test_references_missing_entry_default_policy_renders_key_row(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    aux_path = tmp_path / "doc.aux"
+    bbl_path = tmp_path / "doc.bbl"
+
+    tex_path.write_text(r"\cite{KeyA,MissingX,KeyB}.")
+    aux_path.write_text(
+        "\n".join(
+            [
+                r"\abx@aux@cite{0}{KeyA}",
+                r"\abx@aux@cite{0}{MissingX}",
+                r"\abx@aux@cite{0}{KeyB}",
+            ]
+        )
+    )
+    bbl_path.write_text(Path("tests/fixtures/bbl/sample.bbl").read_text())
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.run(tex_path.read_text())
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "[2]\tMissingX" in text
+    missing_para = next((p for p in latex.doc.paragraphs if "MissingX" in p.text), None)
+    assert missing_para is not None
+    xml = missing_para._element.xml
+    assert "<w:b/>" in xml or "<w:b " in xml
+    assert 'w:val="CC0000"' in xml
+
+
+def test_references_missing_entry_hole_policy_renders_blank_numbered_row(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    aux_path = tmp_path / "doc.aux"
+    bbl_path = tmp_path / "doc.bbl"
+
+    tex_path.write_text(r"\cite{KeyA,MissingX,KeyB}.")
+    aux_path.write_text(
+        "\n".join(
+            [
+                r"\abx@aux@cite{0}{KeyA}",
+                r"\abx@aux@cite{0}{MissingX}",
+                r"\abx@aux@cite{0}{KeyB}",
+            ]
+        )
+    )
+    bbl_path.write_text(Path("tests/fixtures/bbl/sample.bbl").read_text())
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "missing_entry_policy"
+    ] = "hole"
+    latex.run(tex_path.read_text())
+
+    ref_paras = [p for p in latex.doc.paragraphs if p.text.startswith("[")]
+    hole_para = next((p for p in ref_paras if p.text.startswith("[2]\t") and p.text.strip() == "[2]"), None)
+    assert hole_para is not None
+    xml = hole_para._element.xml
+    assert "<w:b/>" in xml or "<w:b " in xml
+    assert 'w:val="CC0000"' in xml
+
+
 def test_references_section_uses_template_bibliography_style(tmp_path):
     tex_path = tmp_path / "doc.tex"
     aux_path = tmp_path / "doc.aux"

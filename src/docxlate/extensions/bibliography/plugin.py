@@ -65,6 +65,13 @@ class BibliographyPlugin(ExtensionPlugin):
                 return value
         return BIBLIOGRAPHY_MACRO_DEFAULTS.get(name, "")
 
+    def missing_entry_policy(self, latex) -> str:
+        cfg = self.bibliography_config(latex)
+        value = str(cfg.get("missing_entry_policy", "key")).lower()
+        if value in {"hole", "key"}:
+            return value
+        return "key"
+
 
 BIBLIOGRAPHY_PLUGIN = BibliographyPlugin()
 
