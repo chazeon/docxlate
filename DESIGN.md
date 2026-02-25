@@ -264,3 +264,21 @@ Figure numbering policy:
   - Prevent numeric range folding across mixed reference and note-like keys.
 - `wrapfigure` placement currently supports basic left/right alignment only.
   - Add `i`/`o` (inside/outside) anchoring policy for mirrored page layouts/templates.
+
+## Pending Design Cleanup (2026-02-25)
+- Unify macro registration API to avoid parse/render drift:
+  - Keep internal split (parse registry + render handlers), but expose one declaration entry point.
+  - Default behavior should register both parse signature and runtime handler unless explicitly marked parse-only or render-only.
+- Introduce explicit macro kinds:
+  - `declaration` (style-delta propagation, e.g. `\color`, `\bfseries`, `\mdseries`)
+  - `inline` / `block` / `env`
+  - `stub` (parse-only no-op wrappers such as biblatex container macros)
+- Add registry validation at startup/tests:
+  - Detect macros declared as renderable without parse signature.
+  - Detect accidental parse-only registration for commands expected to emit output.
+- Centralize bibliography macro specs in one source-of-truth table:
+  - Single definition for args/signature, parse stub behavior, and runtime replacement text.
+  - Eliminate duplicated lists across BBL parser and bibliography runtime.
+- Keep generated-template LaTeX on explicit parse path:
+  - Caption/bibliography template output must go through `render_generated_latex(...)`.
+  - Avoid plain text append paths for generated LaTeX fragments.
