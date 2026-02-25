@@ -12,25 +12,80 @@ from .layout.anchor_host import trim_trailing_whitespace_runs
 from .layout.caption_box import estimate_caption_box_height_emu
 
 
+def _current_wrap_entry(latex) -> dict | None:
+    stack = latex.context.get("figure_stack", [])
+    if stack and stack[-1].get("kind") == "wrapfigure":
+        return stack[-1]
+    return None
+
+
+def _parse_directive_inches(value: str) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _apply_wrap_directive(entry: dict, path: str, inches: float) -> bool:
+    if path == "figure.wrap.shift.y":
+        entry["pos_y_emu"] = int(entry.get("pos_y_emu", 0)) + int(Inches(inches))
+        return True
+    if path == "figure.wrap.gap":
+        if inches < 0:
+            return False
+        entry["gap_emu"] = int(Inches(inches))
+        return True
+
+    side_to_dist = {
+        "left": "dist_l",
+        "right": "dist_r",
+        "top": "dist_t",
+        "bottom": "dist_b",
+    }
+    side_to_inset = {
+        "left": "l_ins",
+        "right": "r_ins",
+        "top": "t_ins",
+        "bottom": "b_ins",
+    }
+    if path.startswith("figure.wrap.pad."):
+        side = path.rsplit(".", 1)[-1]
+        if side not in side_to_dist or inches < 0:
+            return False
+        distances = entry.setdefault("wrap_distances_emu", {})
+        distances[side_to_dist[side]] = int(Inches(inches))
+        return True
+    if path.startswith("figure.wrap.inset."):
+        side = path.rsplit(".", 1)[-1]
+        if side not in side_to_inset or inches < 0:
+            return False
+        insets = entry.setdefault("textbox_insets_emu", {})
+        insets[side_to_inset[side]] = int(Inches(inches))
+        return True
+    return False
+
+
 def register_handlers(latex, *, plugin):
-    @latex.command("docxlatefigshifty", inline=True)
-    def handle_docxlatefigshifty(node):
-        value = latex.get_arg_text(node, 0, key="value")
-        try:
-            inches = float(value)
-        except (TypeError, ValueError):
+    @latex.command("docxlatefigwrapset", inline=True)
+    def handle_docxlatefigwrapset(node):
+        path = latex.get_arg_text(node, 0, key="path").strip().lower()
+        value = latex.get_arg_text(node, 1, key="value")
+        inches = _parse_directive_inches(value)
+        if inches is None:
             latex.context.setdefault("warnings", []).append(
-                f"Invalid docxlate figure shift directive value: {value!r}"
+                f"Invalid docxlate figure wrap directive value for {path}: {value!r}"
             )
             return
-        shift_emu = int(Inches(inches))
-        stack = latex.context.get("figure_stack", [])
-        if stack and stack[-1].get("kind") == "wrapfigure":
-            stack[-1]["pos_y_emu"] = int(stack[-1].get("pos_y_emu", 0)) + shift_emu
+        entry = _current_wrap_entry(latex)
+        if entry is None:
+            latex.context.setdefault("warnings", []).append(
+                f"Ignored docxlate directive outside wrapfigure: {path}"
+            )
             return
-        latex.context.setdefault("warnings", []).append(
-            "Ignored docxlate figure shift directive outside wrapfigure."
-        )
+        if not _apply_wrap_directive(entry, path, inches):
+            latex.context.setdefault("warnings", []).append(
+                f"Invalid or unsupported docxlate wrap directive: {path}={value}"
+            )
 
     @latex.command("includegraphics", inline=True)
     def handle_includegraphics(node):
@@ -102,14 +157,17 @@ def register_handlers(latex, *, plugin):
 
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_run = stack[-1].get("image_run")
-            gap_emu = plugin.caption_gap_emu(latex)
+            gap_emu = int(stack[-1].get("gap_emu", plugin.caption_gap_emu(latex)))
+            anchor_mode = stack[-1].get("caption_anchor_mode", plugin.wrap_caption_anchor_mode(latex))
             pos_y_emu = int(stack[-1].get("pos_y_emu", plugin.wrap_offset_y_emu(latex)))
+            wrap_distances_emu = stack[-1].get("wrap_distances_emu")
+            textbox_insets_emu = stack[-1].get("textbox_insets_emu")
             box_cx, _ = wrapped_figure_box_size(stack[-1], caption_cy=0, gap_emu=gap_emu)
             caption_cy = estimate_caption_box_height_emu(p.text, box_cx)
             box_cx, box_cy = wrapped_figure_box_size(stack[-1], caption_cy=caption_cy, gap_emu=gap_emu)
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
 
-            if image_run is not None:
+            if image_run is not None and anchor_mode != "separate":
                 latex.emit_wrapped_figure_caption_group_anchor(
                     image_run=image_run,
                     caption_paragraph=p,
@@ -119,6 +177,8 @@ def register_handlers(latex, *, plugin):
                     box_cx_emu=box_cx,
                     box_cy_emu=box_cy,
                     gap_emu=gap_emu,
+                    wrap_distances_emu=wrap_distances_emu,
+                    textbox_insets_emu=textbox_insets_emu,
                 )
                 stack[-1]["wrapped_emitted"] = True
             else:
@@ -129,8 +189,11 @@ def register_handlers(latex, *, plugin):
                     pos_y_emu=pos_y_emu + image_cy + gap_emu,
                     box_cx_emu=box_cx,
                     box_cy_emu=caption_cy,
+                    wrap_distances_emu=wrap_distances_emu,
+                    textbox_insets_emu=textbox_insets_emu,
                 )
-                stack[-1]["wrapped_emitted"] = True
+                if image_run is None:
+                    stack[-1]["wrapped_emitted"] = True
 
     @latex.env("wrapfigure")
     def handle_wrapfigure(node):
@@ -155,6 +218,7 @@ def register_handlers(latex, *, plugin):
                 "width": width,
                 "lines": lines,
                 "pos_y_emu": pos_y_emu,
+                "caption_anchor_mode": plugin.wrap_caption_anchor_mode(latex),
                 "anchor_paragraph": p,
             }
         )
@@ -173,6 +237,7 @@ def register_handlers(latex, *, plugin):
                         image_run,
                         place=stack[-1].get("place"),
                         pos_y_emu=int(stack[-1].get("pos_y_emu", plugin.wrap_offset_y_emu(latex))),
+                        wrap_distances_emu=stack[-1].get("wrap_distances_emu"),
                     )
                     if anchor is not None:
                         stack[-1]["wrapped_emitted"] = True

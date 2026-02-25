@@ -20,7 +20,9 @@ from .model import EquationSpec, LinkTarget, RenderContext, SpanCompositor
 
 class DocxlateDirectiveTokenizer(Tokenizer):
     _directive_re = re.compile(
-        r"^\s*docxlate:\s*figure\.wrap\.shift\.y\s*=\s*([-+]?\d*\.?\d+)\s*$",
+        r"^\s*docxlate:\s*"
+        r"(figure\.wrap\.(?:shift\.[xy]|gap|pad\.(?:left|right|top|bottom)|inset\.(?:left|right|top|bottom)))"
+        r"\s*=\s*([-+]?\d*\.?\d+)\s*$",
         flags=re.I,
     )
 
@@ -35,7 +37,9 @@ class DocxlateDirectiveTokenizer(Tokenizer):
             return line
         match = self._directive_re.match(line.strip())
         if match is not None:
-            injected = rf"\docxlatefigshifty{{{match.group(1)}}}"
+            key = match.group(1).lower()
+            value = match.group(2)
+            injected = rf"\docxlatefigwrapset{{{key}}}{{{value}}}"
             self._charBuffer[:0] = list(injected)
         return line
 
@@ -798,11 +802,13 @@ class LatexBridge:
         *,
         place: str | None,
         pos_y_emu: int = 0,
+        wrap_distances_emu: dict[str, int] | None = None,
     ):
         return self.emitter.convert_image_run_to_wrap_anchor(
             run,
             place=place,
             pos_y_emu=pos_y_emu,
+            wrap_distances_emu=wrap_distances_emu,
         )
 
     def emit_wrapped_caption_anchor(
@@ -814,6 +820,8 @@ class LatexBridge:
         pos_y_emu: int,
         box_cx_emu: int,
         box_cy_emu: int,
+        wrap_distances_emu: dict[str, int] | None = None,
+        textbox_insets_emu: dict[str, int] | None = None,
     ):
         return self.emitter.emit_wrapped_caption_anchor(
             self.doc,
@@ -823,6 +831,8 @@ class LatexBridge:
             pos_y_emu=pos_y_emu,
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
+            wrap_distances_emu=wrap_distances_emu,
+            textbox_insets_emu=textbox_insets_emu,
         )
 
     def emit_wrapped_figure_caption_group_anchor(
@@ -836,6 +846,8 @@ class LatexBridge:
         box_cx_emu: int,
         box_cy_emu: int,
         gap_emu: int,
+        wrap_distances_emu: dict[str, int] | None = None,
+        textbox_insets_emu: dict[str, int] | None = None,
     ):
         return self.emitter.emit_wrapped_figure_caption_group_anchor(
             self.doc,
@@ -847,6 +859,8 @@ class LatexBridge:
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
             gap_emu=gap_emu,
+            wrap_distances_emu=wrap_distances_emu,
+            textbox_insets_emu=textbox_insets_emu,
         )
 
     def _emit_line_break(self):

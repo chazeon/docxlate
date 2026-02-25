@@ -10,6 +10,7 @@ from docxlate.model import Edges, Point
 class WrapConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    caption_anchor: Literal["group", "separate"] | None = None
     pad: Edges | None = None
     inset: Edges | None = None
     gap: float | None = Field(default=None, ge=0)

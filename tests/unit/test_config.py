@@ -55,6 +55,20 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     assert validated["plugins"]["figure"]["image"]["wrap"]["shift"]["y"] == 0.1
 
 
+def test_validate_runtime_config_accepts_wrap_caption_anchor_mode():
+    validated = validate_runtime_config(
+        {"plugins": {"figure": {"image": {"wrap": {"caption_anchor": "separate"}}}}}
+    )
+    assert validated["plugins"]["figure"]["image"]["wrap"]["caption_anchor"] == "separate"
+
+
+def test_validate_runtime_config_rejects_invalid_wrap_caption_anchor_mode():
+    with pytest.raises(ValidationError):
+        validate_runtime_config(
+            {"plugins": {"figure": {"image": {"wrap": {"caption_anchor": "split"}}}}}
+        )
+
+
 def test_validate_runtime_config_rejects_unknown_fields():
     with pytest.raises(ValidationError):
         validate_runtime_config({"unknown_option": 1})

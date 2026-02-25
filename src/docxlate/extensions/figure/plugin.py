@@ -55,6 +55,12 @@ class FigurePlugin(ExtensionPlugin):
             return 0
         return int(Inches(inches))
 
+    def wrap_caption_anchor_mode(self, latex) -> str:
+        value = self.image_wrap_config(latex).get("caption_anchor")
+        if value in {"group", "separate"}:
+            return str(value)
+        return "group"
+
 
 FIGURE_PLUGIN = FigurePlugin()
 

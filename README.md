@@ -133,12 +133,29 @@ Currently supported:
   - Must be inside a `wrapfigure` environment.
   - Adds to configured `plugins.figure.image.wrap.shift.y` for that same `wrapfigure`.
   - Unit is inches (float, can be negative).
+- `% docxlate: figure.wrap.gap=<inches>`
+  - Overrides caption gap for that same `wrapfigure`.
+  - Unit is inches (non-negative).
+- `% docxlate: figure.wrap.pad.{left|right|top|bottom}=<inches>`
+  - Overrides wrap distances (`distL/distR/distT/distB`) for that same `wrapfigure`.
+  - Unit is inches (non-negative).
+- `% docxlate: figure.wrap.inset.{left|right|top|bottom}=<inches>`
+  - Overrides textbox insets for that same `wrapfigure`.
+  - Unit is inches (non-negative).
+
+Notes:
+- Directive comments outside `wrapfigure` are ignored with a warning.
+- `figure.wrap.shift.x` is reserved for future use and currently ignored.
+- Anchor strategy can be set globally with
+  `plugins.figure.image.wrap.caption_anchor: group | separate`.
 
 Example:
 
 ```tex
 \begin{wrapfigure}{r}{0.4\textwidth}
 % docxlate: figure.wrap.shift.y=0.2
+% docxlate: figure.wrap.pad.left=0.2
+% docxlate: figure.wrap.gap=0.2
 \includegraphics{fig.png}
 \caption{Shifted down by 0.2in}
 \end{wrapfigure}

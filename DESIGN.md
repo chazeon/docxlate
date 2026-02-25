@@ -284,4 +284,5 @@ Figure numbering policy:
   - Avoid plain text append paths for generated LaTeX fragments.
 - Per-figure directive handling:
   - `% docxlate: ...` directives are injected from tokenizer stage (not pre-parse string rewrite).
-  - Current directive: `figure.wrap.shift.y=<inches>` for next-`wrapfigure` local vertical shift.
+  - Directives are scoped to the active `wrapfigure`; outside-env directives are ignored with warning.
+  - Supported keys: `figure.wrap.shift.y`, `figure.wrap.gap`, `figure.wrap.pad.{side}`, `figure.wrap.inset.{side}`.
