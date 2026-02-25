@@ -16,10 +16,13 @@ class DocxlateBibEntry(Command):
 
 
 BIBLIOGRAPHY_MACRO_DEFAULTS: dict[str, str] = {
+    "bibrangedash": "\u2013",
     "bibinitperiod": ".",
     "bibnamedelima": " ",
     "bibinitdelim": " ",
     "bibinithyphendelim": "-",
+    "textendash": "\u2013",
+    "textemdash": "\u2014",
 }
 
 

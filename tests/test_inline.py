@@ -134,6 +134,30 @@ def test_tex_quotes_are_preserved_in_text_stream():
     assert latex.doc.paragraphs[0].text == "He said: ``Hello'' and left."
 
 
+def test_dash_conversion_is_consistent_between_parsed_nodes_and_fragments():
+    _reset_router()
+    latex.run(r"\paragraph{A} C--D")
+    # In parsed command/body nodes, '--' can normalize to en dash.
+    assert "C–D" in latex.doc.paragraphs[0].text
+
+    # Fragment rendering should match parsed-node behavior.
+    p = latex.add_paragraph_for_role("body")
+    latex.render_latex_fragment("C--D", paragraph=p)
+    assert "C–D" in latex.doc.paragraphs[-1].text
+
+
+def test_render_latex_fragment_preserves_spaces_and_tie_with_dash_ligature():
+    _reset_router()
+    p = latex.add_paragraph_for_role("body")
+    latex.render_latex_fragment(
+        r"Figure 1~--~Deep water cycle (arrows): subduction, storage, and degassing.",
+        paragraph=p,
+    )
+    text = latex.doc.paragraphs[-1].text
+    assert "Figure 1\u00A0–\u00A0Deep water cycle" in text
+    assert "storage, and degassing." in text
+
+
 def test_textquote_commands_render_typographic_quotes():
     _reset_router()
     latex.run(r"He said: \textquotedblleft Hello\textquotedblright.")

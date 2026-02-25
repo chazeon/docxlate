@@ -142,9 +142,8 @@ def _normalize_identifier(value: str) -> str:
 def _preserve_tex_text(value: str) -> str:
     # Keep TeX tokens intact so bibliography rendering can flow through the
     # regular parser/emitter pipeline without broad lossy normalization.
-    # Normalize only known biblatex control macros into TeX-native text.
+    # Normalize only spacing/control macros that should not remain symbolic.
     text = str(value).strip()
-    text = re.sub(r"\\bibrangedash\s*", "--", text)
     replacements = {
         "\\bibinitperiod": ".",
         "\\bibnamedelima": " ",

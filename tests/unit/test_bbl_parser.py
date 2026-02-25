@@ -11,7 +11,7 @@ def test_parse_bbl_extracts_entries_and_fields():
     key_a = entries["KeyA"]
     assert key_a["type"] == "article"
     assert key_a["fields"]["title"] == "A sample article"
-    assert key_a["fields"]["pages"] == "10--20"
+    assert key_a["fields"]["pages"] == r"10\bibrangedash 20"
     assert key_a["fields"]["doi"] == "10.1000/example"
     assert key_a["authors"][:2] == ["Doe, Jane", "Roe, John"]
     assert key_a["author_names"][0]["family"] == "Doe"
@@ -27,7 +27,7 @@ def test_format_bibliography_entry_contains_core_parts():
     assert "(2024)" in formatted
     assert "A sample article" in formatted
     assert r"\textit{J. Testing}" in formatted
-    assert "10--20" in formatted
+    assert r"10\bibrangedash 20" in formatted
     assert r"\href{https://doi.org/10.1000/example}{10.1000/example}" in formatted
 
 

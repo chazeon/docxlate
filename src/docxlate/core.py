@@ -386,9 +386,24 @@ class LatexBridge:
     def render_latex_fragment(self, tex_source: str, *, paragraph=None, style=None):
         """
         Parse and render a LaTeX fragment through the regular node walker.
-        This reuses existing command/env handlers and inline style handling.
+
+        Important parser-context pitfall:
+        Parsing a raw top-level fragment (tex.input(fragment)) does not always
+        behave like normal document content parsing in plasTeX. In particular,
+        token handling can diverge from content that appears inside command
+        arguments in the main document pipeline (for example, dash/ligature
+        behavior observed in templates).
+
+        To keep fragment rendering aligned with regular LaTeX content parsing,
+        we wrap the fragment in a temporary macro argument and render that
+        parsed argument node tree. This forces the same argument-parse context
+        while keeping output free of the wrapper command itself.
         """
         from plasTeX.TeX import TeX
+
+        class _DocxlateFragment(Command):
+            macroName = "docxlatefragment"
+            args = "self"
 
         tex = TeX()
         macro_context = self.context.get("_parse_macro_context")
@@ -396,9 +411,23 @@ class LatexBridge:
             tex.ownerDocument.context.importMacros(macro_context)
         for macro_name, macro_class in self.macro_handlers.items():
             tex.ownerDocument.context.addGlobal(macro_name, macro_class)
-        tex.input(tex_source)
+        tex.ownerDocument.context.addGlobal("docxlatefragment", _DocxlateFragment)
+        tex.input(r"\docxlatefragment{" + tex_source + "}")
         parsed = tex.parse()
-        nodes = self._root_nodes(parsed)
+        root_nodes = self._root_nodes(parsed)
+        fragment_node = next(
+            (
+                n
+                for n in root_nodes
+                if str(getattr(n, "nodeName", "")).lstrip("\\") == "docxlatefragment"
+            ),
+            None,
+        )
+        if fragment_node is not None:
+            fragment = getattr(fragment_node, "attributes", {}).get("self")
+            nodes = list(getattr(fragment, "childNodes", []) or [])
+        else:
+            nodes = root_nodes
         with self.render_frame(paragraph=paragraph):
             self._walk(nodes, render_context=style)
 
