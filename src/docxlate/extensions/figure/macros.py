@@ -15,17 +15,23 @@ class wrapfigure(Environment):
     args = "[ lines ] place:str width"
 
 
+class docxlatefigshifty(Command):
+    args = "value:str"
+
+
 def register_macros(latex):
     for macro_name, macro_class in {
         "includegraphics": includegraphics,
         "caption": caption,
         "wrapfigure": wrapfigure,
+        "docxlatefigshifty": docxlatefigshifty,
     }.items():
         latex.macro(macro_name, macro_class)
 
 
 __all__ = [
     "caption",
+    "docxlatefigshifty",
     "includegraphics",
     "register_macros",
     "wrapfigure",

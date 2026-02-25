@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
+from io import IOBase
+import os
 import re
 from typing import Mapping
 
@@ -9,9 +11,48 @@ from docx import Document
 from docx.shared import Pt
 from plasTeX import Command, Environment
 from plasTeX.DOM import Text
+from plasTeX.TeX import TeX
+from plasTeX.Tokenizer import Tokenizer
 
 from .docx_ext import DocxEmitterBackend
 from .model import EquationSpec, LinkTarget, RenderContext, SpanCompositor
+
+
+class DocxlateDirectiveTokenizer(Tokenizer):
+    _directive_re = re.compile(
+        r"^\s*docxlate:\s*figure\.wrap\.shift\.y\s*=\s*([-+]?\d*\.?\d+)\s*$",
+        flags=re.I,
+    )
+
+    def __init__(self, source, context):
+        super().__init__(source, context)
+        self._source_readline = self.readline
+        self.readline = self._readline_with_directives
+
+    def _readline_with_directives(self):
+        line = self._source_readline()
+        if not line:
+            return line
+        match = self._directive_re.match(line.strip())
+        if match is not None:
+            injected = rf"\docxlatefigshifty{{{match.group(1)}}}"
+            self._charBuffer[:0] = list(injected)
+        return line
+
+
+class DocxlateTeX(TeX):
+    def input(self, source):
+        if source is None:
+            return
+        if self.jobname is None:
+            if isinstance(source, str):
+                self.jobname = ""
+            elif isinstance(source, IOBase):
+                self.jobname = os.path.basename(os.path.splitext(source.name)[0])
+        tokenizer = DocxlateDirectiveTokenizer(source, self.ownerDocument.context)
+        self.inputs.append((tokenizer, iter(tokenizer)))
+        self.currentInput = self.inputs[-1]
+        return self
 
 
 class LatexBridge:
@@ -156,13 +197,11 @@ class LatexBridge:
         self.handle_event("post_process")
 
     def _parse_source(self, tex_source):
-        from plasTeX.TeX import TeX
-
         parse_source = self._sanitize_source_for_parse(tex_source)
         parsed = None
         parse_error = None
         try:
-            tex = TeX()
+            tex = DocxlateTeX()
             for macro_name, macro_class in self.macro_handlers.items():
                 tex.ownerDocument.context.addGlobal(macro_name, macro_class)
             tex.input(parse_source)
@@ -176,7 +215,7 @@ class LatexBridge:
             if "\\begin{document}" in parse_source:
                 body = self._extract_document_body(parse_source)
                 if body is not None:
-                    fallback_tex = TeX()
+                    fallback_tex = DocxlateTeX()
                     for macro_name, macro_class in self.macro_handlers.items():
                         fallback_tex.ownerDocument.context.addGlobal(
                             macro_name, macro_class
@@ -194,7 +233,7 @@ class LatexBridge:
         if self._looks_like_preamble_only(parsed) and "\\begin{document}" in parse_source:
             body = self._extract_document_body(parse_source)
             if body is not None:
-                fallback_tex = TeX()
+                fallback_tex = DocxlateTeX()
                 for macro_name, macro_class in self.macro_handlers.items():
                     fallback_tex.ownerDocument.context.addGlobal(macro_name, macro_class)
                 fallback_tex.input(body)
@@ -399,13 +438,11 @@ class LatexBridge:
         parsed argument node tree. This forces the same argument-parse context
         while keeping output free of the wrapper command itself.
         """
-        from plasTeX.TeX import TeX
-
         class _DocxlateFragment(Command):
             macroName = "docxlatefragment"
             args = "self"
 
-        tex = TeX()
+        tex = DocxlateTeX()
         macro_context = self.context.get("_parse_macro_context")
         if isinstance(macro_context, dict):
             tex.ownerDocument.context.importMacros(macro_context)

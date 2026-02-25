@@ -282,3 +282,6 @@ Figure numbering policy:
 - Keep generated-template LaTeX on explicit parse path:
   - Caption/bibliography template output must go through `render_generated_latex(...)`.
   - Avoid plain text append paths for generated LaTeX fragments.
+- Per-figure directive handling:
+  - `% docxlate: ...` directives are injected from tokenizer stage (not pre-parse string rewrite).
+  - Current directive: `figure.wrap.shift.y=<inches>` for next-`wrapfigure` local vertical shift.

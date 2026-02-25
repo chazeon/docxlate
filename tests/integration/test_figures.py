@@ -324,6 +324,83 @@ def test_wrapfigure_caption_gap_is_configurable(tmp_path):
     assert int(spacing_after) == int((0.2 * 914400) // 635)
 
 
+def test_wrapfigure_comment_shift_y_outside_env_is_ignored(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+% docxlate: figure.wrap.shift.y=0.25
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {"wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
+    pos_offsets: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        offsets = root.xpath(".//wp:anchor/wp:positionV/wp:posOffset/text()", namespaces=ns)
+        pos_offsets.extend(int(v) for v in offsets if str(v).strip())
+    assert len(pos_offsets) >= 2
+    first_pos, second_pos = pos_offsets[0], pos_offsets[1]
+
+    assert first_pos == 0
+    assert second_pos == 0
+    assert any(
+        "Ignored docxlate figure shift directive outside wrapfigure." in msg
+        for msg in latex.context.get("warnings", [])
+    )
+
+
+def test_wrapfigure_comment_shift_y_inside_env_applies_to_current_not_following(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+% docxlate: figure.wrap.shift.y=0.25
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {"wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
+    pos_offsets: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        offsets = root.xpath(".//wp:anchor/wp:positionV/wp:posOffset/text()", namespaces=ns)
+        pos_offsets.extend(int(v) for v in offsets if str(v).strip())
+    assert len(pos_offsets) >= 2
+    first_pos, second_pos = pos_offsets[0], pos_offsets[1]
+    assert first_pos == int(0.25 * 914400)
+    assert second_pos == 0
+
+
 def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)

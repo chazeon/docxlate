@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from docx.oxml.ns import qn
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
 from docxlate.model import RenderContext
 
@@ -13,6 +13,25 @@ from .layout.caption_box import estimate_caption_box_height_emu
 
 
 def register_handlers(latex, *, plugin):
+    @latex.command("docxlatefigshifty", inline=True)
+    def handle_docxlatefigshifty(node):
+        value = latex.get_arg_text(node, 0, key="value")
+        try:
+            inches = float(value)
+        except (TypeError, ValueError):
+            latex.context.setdefault("warnings", []).append(
+                f"Invalid docxlate figure shift directive value: {value!r}"
+            )
+            return
+        shift_emu = int(Inches(inches))
+        stack = latex.context.get("figure_stack", [])
+        if stack and stack[-1].get("kind") == "wrapfigure":
+            stack[-1]["pos_y_emu"] = int(stack[-1].get("pos_y_emu", 0)) + shift_emu
+            return
+        latex.context.setdefault("warnings", []).append(
+            "Ignored docxlate figure shift directive outside wrapfigure."
+        )
+
     @latex.command("includegraphics", inline=True)
     def handle_includegraphics(node):
         raw_path = latex.get_arg_text(node, 0, key="file")
@@ -84,6 +103,7 @@ def register_handlers(latex, *, plugin):
         if stack and stack[-1].get("kind") == "wrapfigure":
             image_run = stack[-1].get("image_run")
             gap_emu = plugin.caption_gap_emu(latex)
+            pos_y_emu = int(stack[-1].get("pos_y_emu", plugin.wrap_offset_y_emu(latex)))
             box_cx, _ = wrapped_figure_box_size(stack[-1], caption_cy=0, gap_emu=gap_emu)
             caption_cy = estimate_caption_box_height_emu(p.text, box_cx)
             box_cx, box_cy = wrapped_figure_box_size(stack[-1], caption_cy=caption_cy, gap_emu=gap_emu)
@@ -95,7 +115,7 @@ def register_handlers(latex, *, plugin):
                     caption_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
                     place=stack[-1].get("place"),
-                    pos_y_emu=plugin.wrap_offset_y_emu(latex),
+                    pos_y_emu=pos_y_emu,
                     box_cx_emu=box_cx,
                     box_cy_emu=box_cy,
                     gap_emu=gap_emu,
@@ -106,7 +126,7 @@ def register_handlers(latex, *, plugin):
                     source_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
                     place=stack[-1].get("place"),
-                    pos_y_emu=plugin.wrap_offset_y_emu(latex) + image_cy + gap_emu,
+                    pos_y_emu=pos_y_emu + image_cy + gap_emu,
                     box_cx_emu=box_cx,
                     box_cy_emu=caption_cy,
                 )
@@ -126,12 +146,15 @@ def register_handlers(latex, *, plugin):
             p.paragraph_format.space_after = Pt(0)
             created_anchor_host = True
         stack = latex.context.setdefault("figure_stack", [])
+        base_pos_y_emu = plugin.wrap_offset_y_emu(latex)
+        pos_y_emu = int(base_pos_y_emu)
         stack.append(
             {
                 "kind": "wrapfigure",
                 "place": place,
                 "width": width,
                 "lines": lines,
+                "pos_y_emu": pos_y_emu,
                 "anchor_paragraph": p,
             }
         )
@@ -149,7 +172,7 @@ def register_handlers(latex, *, plugin):
                     anchor = latex.convert_image_run_to_wrap_anchor(
                         image_run,
                         place=stack[-1].get("place"),
-                        pos_y_emu=plugin.wrap_offset_y_emu(latex),
+                        pos_y_emu=int(stack[-1].get("pos_y_emu", plugin.wrap_offset_y_emu(latex))),
                     )
                     if anchor is not None:
                         stack[-1]["wrapped_emitted"] = True

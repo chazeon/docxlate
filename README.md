@@ -122,6 +122,33 @@ mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml
 figure_caption_template: "\\textbf{<< fig_name >>. << fig_num >>} << caption >>"
 ```
 
+## Per-Figure Comment Directives
+
+Global config is sometimes not enough for floating figure placement. You can add
+inline directives in LaTeX comments for one-off overrides.
+
+Currently supported:
+
+- `% docxlate: figure.wrap.shift.y=<inches>`
+  - Must be inside a `wrapfigure` environment.
+  - Adds to configured `plugins.figure.image.wrap.shift.y` for that same `wrapfigure`.
+  - Unit is inches (float, can be negative).
+
+Example:
+
+```tex
+\begin{wrapfigure}{r}{0.4\textwidth}
+% docxlate: figure.wrap.shift.y=0.2
+\includegraphics{fig.png}
+\caption{Shifted down by 0.2in}
+\end{wrapfigure}
+
+\begin{wrapfigure}{r}{0.4\textwidth}
+\includegraphics{fig2.png}
+\caption{No per-figure shift override}
+\end{wrapfigure}
+```
+
 ## Math Conversion
 
 Math uses `latex2mathml` + XSL transform to OMML.
