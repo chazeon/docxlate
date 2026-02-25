@@ -286,3 +286,25 @@ Figure numbering policy:
   - `% docxlate: ...` directives are injected from tokenizer stage (not pre-parse string rewrite).
   - Directives are scoped to the active `wrapfigure`; outside-env directives are ignored with warning.
   - Supported keys: `figure.wrap.shift.y`, `figure.wrap.gap`, `figure.wrap.pad.{side}`, `figure.wrap.inset.{side}`.
+
+## Pending Work (2026-02-25)
+
+- Table support: theme-aware rendering
+  - Scope:
+    - Map table/cell rendering to DOCX template styles first (e.g., `Table Grid`, custom named styles), then fall back to deterministic defaults.
+    - Support core table properties needed for fidelity: header row emphasis, border model, cell padding, and alignment.
+    - Keep style resolution in one backend-facing table-theme adapter to avoid per-writer drift.
+  - Acceptance criteria:
+    - Conversion uses template-defined table style when present and falls back predictably when absent.
+    - XML-level integration tests verify header formatting, border presence, and padding/alignment for a representative fixture.
+    - Runtime emits warnings for unsupported table style features instead of silently dropping them.
+
+- Markdown/TXT writer for deterministic testing
+  - Scope:
+    - Add a lightweight writer that emits structural output (headings, paragraphs, lists, citations, references, tables) without DOCX-specific formatting noise.
+    - Use this writer as a stable regression oracle for parser/render logic where binary DOCX diffs are noisy.
+    - Keep writer behind a backend interface so it can share the same render events as DOCX.
+  - Acceptance criteria:
+    - New golden tests validate Markdown/TXT output for citations/references, nested lists, and table structure.
+    - CI can run these tests quickly without requiring DOCX XML assertions for every behavior check.
+    - Documented limitations (what formatting is intentionally not represented in Markdown/TXT output).
