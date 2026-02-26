@@ -9,7 +9,8 @@ from io import BytesIO
 import click
 import yaml
 from pydantic import ValidationError
-from .config import validate_runtime_config
+from .bcf import declared_fields_from_bcf, parse_bcf
+from .config import format_runtime_config_error, validate_runtime_config
 from .handlers import latex
 
 
@@ -190,8 +191,11 @@ def convert_main(tex_path, output, template, config, styles_xml):
                 raise ValueError("YAML config must be a mapping at top level")
             try:
                 latex.context.update(validate_runtime_config(loaded))
-            except ValidationError as exc:
-                raise click.ClickException(f"Invalid config at {config_path}: {exc}") from exc
+            except (ValidationError, ValueError) as exc:
+                detail = format_runtime_config_error(exc)
+                raise click.ClickException(
+                    f"Invalid config at {config_path}:\n{detail}"
+                ) from exc
 
         latex.context['tex_path'] = tex_path  # Store the path for potential .aux loading in handlers
         latex.run(tex_content)
@@ -248,6 +252,44 @@ def dump_theme_main(docx_path, output):
 def dump_font_table_main(docx_path, output):
     _dump_part_from_docx(Path(docx_path), "word/fontTable.xml", Path(output))
     click.echo(f"Wrote font table XML to {output}")
+
+
+@cli.command(name="check-bcf")
+@click.argument("bcf_path", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--field",
+    "fields",
+    multiple=True,
+    help="Field name to check for in the BCF datamodel (repeatable).",
+)
+@click.option(
+    "--list-fields",
+    is_flag=True,
+    help="Print all declared BCF fields.",
+)
+def check_bcf_main(bcf_path, fields, list_fields):
+    path = Path(bcf_path)
+    declared = declared_fields_from_bcf(path)
+    cite_order = parse_bcf(path)
+    click.echo(f"Citekeys with order: {len(cite_order)}")
+    click.echo(f"Declared fields: {len(declared)}")
+
+    if list_fields or not fields:
+        for name in sorted(declared):
+            click.echo(name)
+        return
+
+    missing = []
+    for field_name in fields:
+        if field_name in declared:
+            click.echo(f"OK: {field_name}")
+        else:
+            click.echo(f"MISSING: {field_name}")
+            missing.append(field_name)
+    if missing:
+        raise click.ClickException(
+            "Missing fields: " + ", ".join(sorted(set(missing)))
+        )
 
 
 if __name__ == "__main__":

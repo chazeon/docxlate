@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
+from io import IOBase
+import os
 import re
 from typing import Mapping
 
@@ -9,9 +11,52 @@ from docx import Document
 from docx.shared import Pt
 from plasTeX import Command, Environment
 from plasTeX.DOM import Text
+from plasTeX.TeX import TeX
+from plasTeX.Tokenizer import Tokenizer
 
 from .docx_ext import DocxEmitterBackend
 from .model import EquationSpec, LinkTarget, RenderContext, SpanCompositor
+
+
+class DocxlateDirectiveTokenizer(Tokenizer):
+    _directive_re = re.compile(
+        r"^\s*docxlate:\s*"
+        r"(figure\.wrap\.(?:shift\.[xy]|gap|pad\.(?:left|right|top|bottom)|inset\.(?:left|right|top|bottom)))"
+        r"\s*=\s*([-+]?\d*\.?\d+)\s*$",
+        flags=re.I,
+    )
+
+    def __init__(self, source, context):
+        super().__init__(source, context)
+        self._source_readline = self.readline
+        self.readline = self._readline_with_directives
+
+    def _readline_with_directives(self):
+        line = self._source_readline()
+        if not line:
+            return line
+        match = self._directive_re.match(line.strip())
+        if match is not None:
+            key = match.group(1).lower()
+            value = match.group(2)
+            injected = rf"\docxlatefigwrapset{{{key}}}{{{value}}}"
+            self._charBuffer[:0] = list(injected)
+        return line
+
+
+class DocxlateTeX(TeX):
+    def input(self, source):
+        if source is None:
+            return
+        if self.jobname is None:
+            if isinstance(source, str):
+                self.jobname = ""
+            elif isinstance(source, IOBase):
+                self.jobname = os.path.basename(os.path.splitext(source.name)[0])
+        tokenizer = DocxlateDirectiveTokenizer(source, self.ownerDocument.context)
+        self.inputs.append((tokenizer, iter(tokenizer)))
+        self.currentInput = self.inputs[-1]
+        return self
 
 
 class LatexBridge:
@@ -59,6 +104,15 @@ class LatexBridge:
         self._inline_styles = {
             "textbf": {"bold": True},
             "textit": {"italic": True},
+            "textup": {"italic": False},
+            "textmd": {"bold": False},
+            "textsl": {"italic": True},
+            "textnormal": {
+                "bold": False,
+                "italic": False,
+                "small_caps": False,
+                "monospace": False,
+            },
             "emph": {"italic": True},
             "textsc": {"small_caps": True},
             "texttt": {"monospace": True},
@@ -66,6 +120,7 @@ class LatexBridge:
         self._declaration_styles = {
             "bfseries": {"bold": True},
             "itshape": {"italic": True},
+            "slshape": {"italic": True},
             "scshape": {"small_caps": True},
             "ttfamily": {"monospace": True},
             "upshape": {"italic": False},
@@ -146,17 +201,17 @@ class LatexBridge:
         self.handle_event("post_process")
 
     def _parse_source(self, tex_source):
-        from plasTeX.TeX import TeX
-
         parse_source = self._sanitize_source_for_parse(tex_source)
         parsed = None
         parse_error = None
         try:
-            tex = TeX()
+            tex = DocxlateTeX()
             for macro_name, macro_class in self.macro_handlers.items():
                 tex.ownerDocument.context.addGlobal(macro_name, macro_class)
             tex.input(parse_source)
             parsed = tex.parse()
+            macro_ctx = tex.ownerDocument.context.contexts[-1]
+            self.context["_parse_macro_context"] = dict(macro_ctx)
         except Exception as exc:
             parse_error = exc
 
@@ -164,29 +219,35 @@ class LatexBridge:
             if "\\begin{document}" in parse_source:
                 body = self._extract_document_body(parse_source)
                 if body is not None:
-                    fallback_tex = TeX()
+                    fallback_tex = DocxlateTeX()
                     for macro_name, macro_class in self.macro_handlers.items():
                         fallback_tex.ownerDocument.context.addGlobal(
                             macro_name, macro_class
                         )
                     fallback_tex.input(body)
+                    fallback_parsed = fallback_tex.parse()
+                    macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
+                    self.context["_parse_macro_context"] = dict(macro_ctx)
                     self.context.setdefault("warnings", []).append(
                         f"Full LaTeX parse failed ({type(parse_error).__name__}); used body-only parse fallback."
                     )
-                    return fallback_tex.parse()
+                    return fallback_parsed
             raise parse_error
 
         if self._looks_like_preamble_only(parsed) and "\\begin{document}" in parse_source:
             body = self._extract_document_body(parse_source)
             if body is not None:
-                fallback_tex = TeX()
+                fallback_tex = DocxlateTeX()
                 for macro_name, macro_class in self.macro_handlers.items():
                     fallback_tex.ownerDocument.context.addGlobal(macro_name, macro_class)
                 fallback_tex.input(body)
+                fallback_parsed = fallback_tex.parse()
+                macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
+                self.context["_parse_macro_context"] = dict(macro_ctx)
                 self.context.setdefault("warnings", []).append(
                     "Full LaTeX parse produced no document body; used body-only parse fallback."
                 )
-                return fallback_tex.parse()
+                return fallback_parsed
         return parsed
 
     def _sanitize_source_for_parse(self, tex_source: str) -> str:
@@ -368,16 +429,46 @@ class LatexBridge:
     def render_latex_fragment(self, tex_source: str, *, paragraph=None, style=None):
         """
         Parse and render a LaTeX fragment through the regular node walker.
-        This reuses existing command/env handlers and inline style handling.
-        """
-        from plasTeX.TeX import TeX
 
-        tex = TeX()
+        Important parser-context pitfall:
+        Parsing a raw top-level fragment (tex.input(fragment)) does not always
+        behave like normal document content parsing in plasTeX. In particular,
+        token handling can diverge from content that appears inside command
+        arguments in the main document pipeline (for example, dash/ligature
+        behavior observed in templates).
+
+        To keep fragment rendering aligned with regular LaTeX content parsing,
+        we wrap the fragment in a temporary macro argument and render that
+        parsed argument node tree. This forces the same argument-parse context
+        while keeping output free of the wrapper command itself.
+        """
+        class _DocxlateFragment(Command):
+            macroName = "docxlatefragment"
+            args = "self"
+
+        tex = DocxlateTeX()
+        macro_context = self.context.get("_parse_macro_context")
+        if isinstance(macro_context, dict):
+            tex.ownerDocument.context.importMacros(macro_context)
         for macro_name, macro_class in self.macro_handlers.items():
             tex.ownerDocument.context.addGlobal(macro_name, macro_class)
-        tex.input(tex_source)
+        tex.ownerDocument.context.addGlobal("docxlatefragment", _DocxlateFragment)
+        tex.input(r"\docxlatefragment{" + tex_source + "}")
         parsed = tex.parse()
-        nodes = self._root_nodes(parsed)
+        root_nodes = self._root_nodes(parsed)
+        fragment_node = next(
+            (
+                n
+                for n in root_nodes
+                if str(getattr(n, "nodeName", "")).lstrip("\\") == "docxlatefragment"
+            ),
+            None,
+        )
+        if fragment_node is not None:
+            fragment = getattr(fragment_node, "attributes", {}).get("self")
+            nodes = list(getattr(fragment, "childNodes", []) or [])
+        else:
+            nodes = root_nodes
         with self.render_frame(paragraph=paragraph):
             self._walk(nodes, render_context=style)
 
@@ -437,7 +528,12 @@ class LatexBridge:
             "&": "&",
             "{": "{",
             "}": "}",
+            "textasciitilde": "~",
             "textbackslash": "\\",
+            "textquotedblleft": "“",
+            "textquotedblright": "”",
+            "textquoteleft": "‘",
+            "textquoteright": "’",
         }
         if node_name in literal_map:
             return literal_map[node_name]
@@ -661,7 +757,13 @@ class LatexBridge:
             self._append_text(latex_str, fallback_style, context=RenderContext())
             return
         self.emitter.emit_equation(
-            paragraph, EquationSpec(latex=latex_str, color=active_color, display=False)
+            paragraph,
+            EquationSpec(
+                latex=latex_str,
+                color=active_color,
+                display=False,
+                style=self._active_render_context().style,
+            ),
         )
 
     def emit_equation(
@@ -686,6 +788,7 @@ class LatexBridge:
                 number=number,
                 color=active_color,
                 display=True,
+                style=self._active_render_context().style,
             ),
         )
         return paragraph
@@ -699,11 +802,13 @@ class LatexBridge:
         *,
         place: str | None,
         pos_y_emu: int = 0,
+        wrap_distances_emu: dict[str, int] | None = None,
     ):
         return self.emitter.convert_image_run_to_wrap_anchor(
             run,
             place=place,
             pos_y_emu=pos_y_emu,
+            wrap_distances_emu=wrap_distances_emu,
         )
 
     def emit_wrapped_caption_anchor(
@@ -715,6 +820,8 @@ class LatexBridge:
         pos_y_emu: int,
         box_cx_emu: int,
         box_cy_emu: int,
+        wrap_distances_emu: dict[str, int] | None = None,
+        textbox_insets_emu: dict[str, int] | None = None,
     ):
         return self.emitter.emit_wrapped_caption_anchor(
             self.doc,
@@ -724,6 +831,36 @@ class LatexBridge:
             pos_y_emu=pos_y_emu,
             box_cx_emu=box_cx_emu,
             box_cy_emu=box_cy_emu,
+            wrap_distances_emu=wrap_distances_emu,
+            textbox_insets_emu=textbox_insets_emu,
+        )
+
+    def emit_wrapped_figure_caption_group_anchor(
+        self,
+        *,
+        image_run,
+        caption_paragraph,
+        anchor_paragraph=None,
+        place: str | None,
+        pos_y_emu: int,
+        box_cx_emu: int,
+        box_cy_emu: int,
+        gap_emu: int,
+        wrap_distances_emu: dict[str, int] | None = None,
+        textbox_insets_emu: dict[str, int] | None = None,
+    ):
+        return self.emitter.emit_wrapped_figure_caption_group_anchor(
+            self.doc,
+            image_run=image_run,
+            caption_paragraph=caption_paragraph,
+            anchor_paragraph=anchor_paragraph,
+            place=place,
+            pos_y_emu=pos_y_emu,
+            box_cx_emu=box_cx_emu,
+            box_cy_emu=box_cy_emu,
+            gap_emu=gap_emu,
+            wrap_distances_emu=wrap_distances_emu,
+            textbox_insets_emu=textbox_insets_emu,
         )
 
     def _emit_line_break(self):

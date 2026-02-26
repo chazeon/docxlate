@@ -8,7 +8,7 @@ LaTeX to Word (`.docx`) converter built on:
 
 This project is pragmatic and evolving. It supports many common structures (sections, inline styles, math, citations, references, lists, figures/wrapfigure, links), but is not a full TeX engine.
 
-See `DESIGN.md` for architecture and roadmap.
+See the [Documentation](docs/00_index.md) for full details on architecture, features, and configuration.
 
 ## Why Not Just Pandoc?
 
@@ -24,7 +24,7 @@ This makes cross-reference and citation behavior closer to the compiled LaTeX pr
 ## Installation
 
 ```bash
-pip install .
+pip install docxlate
 ```
 
 or with `uv`:
@@ -59,22 +59,6 @@ Load runtime config from YAML:
 docxlate convert input.tex -o output.docx --config config.yaml
 ```
 
-Legacy one-off styles override (kept for compatibility with older workflows):
-
-```bash
-docxlate convert input.tex -o output.docx --styles-xml styles.xml
-```
-
-Dump DOCX style/layout parts:
-
-```bash
-docxlate dump-styles output.docx -o styles.xml
-docxlate dump-theme output.docx -o theme1.xml
-docxlate dump-font-table output.docx -o fontTable.xml
-```
-
-Dumped XML files are auto-formatted for readability.
-
 If `--config` is omitted, `docxlate.yaml` in the current directory is auto-loaded when present.
 
 ## Library Usage
@@ -95,56 +79,48 @@ latex.save("output.docx")
 
 ## Runtime Config (YAML)
 
-Validated with Pydantic (`extra=forbid`). Current keys:
+Configuration uses a modular plugin system. Detailed documentation is available in [docs/02_configuration.md](docs/02_configuration.md).
 
-- `bibliography_template`
-- `figure_caption_template`
-- `bibliography_numbering`: `bracket` | `none`
-- `bibliography_indent_in`: float (`> 0`)
-- `bibliography_et_al_limit`: int (`> 0`)
-- `citation_compress_ranges`: bool
-- `citation_range_min_run`: int (`> 1`)
-- `title_render_policy`: `explicit` | `auto` | `always`
-- `parse_skip_packages`: list of package names to skip in parser input
-- `parse_skip_usepackage_paths`: list of `\usepackage{...}` path entries to skip in parser input
-- `mathml2omml_xsl_path`: path to MathML->OMML XSL
-
-Example:
+Example `docxlate.yaml`:
 
 ```yaml
-citation_compress_ranges: true
-citation_range_min_run: 2
 title_render_policy: explicit
 parse_skip_packages:
   - fontspec
   - expl3
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
-figure_caption_template: "\\textbf{<< fig_name >>. << fig_num >>} << caption >>"
+
+plugins:
+  bibliography:
+    citation_compress_ranges: true
+    citation_range_min_run: 2
+  figure:
+    caption:
+      template: "\\textbf{<< fig_name >>. << fig_num >>} << caption >>"
+```
+
+## Per-Figure Comment Directives
+
+For one-off overrides of floating figure placement, you can add inline directives in LaTeX comments. See [docs/03_directives.md](docs/03_directives.md) for the full list of supported keys.
+
+Example:
+
+```tex
+\begin{wrapfigure}{r}{0.4\textwidth}
+% docxlate: figure.wrap.shift.y=0.2
+% docxlate: figure.wrap.pad.left=0.2
+% docxlate: figure.wrap.gap=0.2
+\includegraphics{fig.png}
+\caption{Shifted down by 0.2in}
+\end{wrapfigure}
 ```
 
 ## Math Conversion
 
-Math uses `latex2mathml` + XSL transform to OMML.
-
-You must provide `mathml2omml_xsl_path` via config/context. If missing, math falls back to raw MathML text and warning.
-
-Note: `mathml2omml.xsl` is commonly available from local Microsoft Office installations; it is not bundled by this project. On macOS, a common path is:
-
-```text
-/Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
-```
-
-## Notes on Parsing
-
-- `plasTeX` is not a full TeX layout engine.
-- Complex preambles may fail full parse.
-- The converter includes body-only fallback and preamble metadata recovery (`\title`, `\author`, `\date`).
-- Parser skip lists (`parse_skip_packages`, `parse_skip_usepackage_paths`) help avoid known package failures.
+Math uses `latex2mathml` + XSL transform to OMML. You must provide `mathml2omml_xsl_path` via config. See [docs/features/02_math.md](docs/features/math.md) for more info.
 
 ## Testing
 
 ```bash
-uv run pytest -q
+uv run pytest
 ```
-
-(or `pytest tests/`)

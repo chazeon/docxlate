@@ -54,17 +54,22 @@ class BblEntry:
     raw_fields: dict[str, str] = dataclass_field(default_factory=dict)
     raw_lists: dict[str, list[str]] = dataclass_field(default_factory=dict)
     raw_authors: list[str] = dataclass_field(default_factory=list)
+    raw_author_names: list[dict[str, str]] = dataclass_field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "key": self.key,
             "type": self.entry_type,
-            "fields": {k: _normalize_tex_text(v) for k, v in self.raw_fields.items()},
+            "fields": {k: _preserve_tex_text(v) for k, v in self.raw_fields.items()},
             "lists": {
-                k: [_normalize_tex_text(v) for v in values]
+                k: [_preserve_tex_text(v) for v in values]
                 for k, values in self.raw_lists.items()
             },
-            "authors": [_normalize_tex_text(a) for a in self.raw_authors],
+            "authors": [_preserve_tex_text(a) for a in self.raw_authors],
+            "author_names": [
+                {k: str(v).strip() for k, v in author.items()}
+                for author in self.raw_author_names
+            ],
         }
 
 
@@ -130,23 +135,24 @@ def _read_braced(text: str, i: int) -> tuple[str, int]:
     return text[start:], len(text)
 
 
-def _normalize_tex_text(value: str) -> str:
+def _normalize_identifier(value: str) -> str:
+    return str(value).strip().strip("{}")
+
+
+def _preserve_tex_text(value: str) -> str:
+    # Keep TeX tokens intact so bibliography rendering can flow through the
+    # regular parser/emitter pipeline without broad lossy normalization.
+    # Normalize only spacing/control macros that should not remain symbolic.
+    text = str(value).strip()
     replacements = {
-        "\\bibrangedash": "-",
         "\\bibinitperiod": ".",
         "\\bibnamedelima": " ",
         "\\bibinitdelim": " ",
         "\\bibinithyphendelim": "-",
-        "\\textendash": "-",
-        "~": " ",
     }
-    result = value
     for src, dst in replacements.items():
-        result = result.replace(src, dst)
-    result = result.replace("{", "").replace("}", "")
-    result = " ".join(result.split())
-    result = result.replace("- ", "-").replace(" -", "-")
-    return result
+        text = text.replace(src, dst)
+    return text
 
 
 def _fragment_raw_text(value) -> str:
@@ -161,18 +167,19 @@ def _fragment_raw_text(value) -> str:
     return str(value)
 
 
-def _extract_named_group_values(payload: str, key: str) -> list[str]:
-    values: list[str] = []
-    token = f"{key}={{"
+def _extract_all_named_group_values(payload: str) -> dict[str, list[str]]:
+    values: dict[str, list[str]] = {}
+    pattern = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=\{")
     i = 0
-    while True:
-        pos = payload.find(token, i)
-        if pos == -1:
+    while i < len(payload):
+        match = pattern.search(payload, i)
+        if match is None:
             break
-        start = pos + len(token) - 1
+        key = match.group(1)
+        start = match.end() - 1
         value, nxt = _read_braced(payload, start)
-        values.append(value)
-        i = nxt
+        values.setdefault(key, []).append(value)
+        i = max(i + 1, nxt)
     return values
 
 
@@ -203,8 +210,8 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
         node_name = getattr(node, "nodeName", None)
 
         if node_name == "entry":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
-            entry_type = _normalize_tex_text(
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
+            entry_type = _normalize_identifier(
                 _fragment_raw_text(node.attributes.get("type"))
             )
             current = BblEntry(key=key, entry_type=entry_type)
@@ -225,27 +232,36 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
             continue
 
         if node_name == "field":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             value = _fragment_raw_text(node.attributes.get("value"))
             if key:
                 current.raw_fields[key] = value
             continue
 
         if node_name == "list":
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             value = _fragment_raw_text(node.attributes.get("value"))
             if key:
                 current.raw_lists.setdefault(key, []).append(value)
             continue
 
         if node_name == "name":
-            role = _normalize_tex_text(_fragment_raw_text(node.attributes.get("role")))
+            role = _normalize_identifier(_fragment_raw_text(node.attributes.get("role")))
             payload = node.attributes.get("payload")
             payload_source = str(getattr(payload, "source", "") or "")
             if role == "author":
-                families = _extract_named_group_values(payload_source, "family")
-                givens = _extract_named_group_values(payload_source, "given")
-                for idx, family in enumerate(families):
+                all_fields = _extract_all_named_group_values(payload_source)
+                author_count = max((len(vals) for vals in all_fields.values()), default=0)
+                families = all_fields.get("family", [])
+                givens = all_fields.get("given", [])
+                for idx in range(author_count):
+                    author_parts: dict[str, str] = {}
+                    for key, vals in all_fields.items():
+                        if idx < len(vals):
+                            author_parts[key] = vals[idx]
+                    if author_parts:
+                        current.raw_author_names.append(author_parts)
+                    family = families[idx] if idx < len(families) else ""
                     given = givens[idx] if idx < len(givens) else ""
                     author = f"{family}, {given}".strip().strip(",")
                     if author:
@@ -254,7 +270,7 @@ def _collect_entries(doc) -> dict[str, BblEntry]:
 
         if node_name == "verb":
             source_text = str(getattr(node, "source", "") or "")
-            key = _normalize_tex_text(_fragment_raw_text(node.attributes.get("key")))
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
             if source_text.startswith("\\verb{") and key:
                 verb_capture.start_key(key)
             elif verb_capture.field_key:
@@ -288,19 +304,19 @@ def parse_bbl(fname: str | Path) -> dict[str, dict]:
 
 
 DEFAULT_BIB_TEMPLATE = r"""
-<% if authors %>
-<% if authors|length > et_al_limit %>
-<< authors[:et_al_limit]|join(", ") >>, \textit{et al.}
-<% else %>
-<< authors|join(", ") >>
-<% endif %>
-.<% endif %>
-<% if fields.year %> (<< fields.year >>).<% endif %>
-<% if fields.title %> << fields.title >>.<% endif %>
-<% if fields.journaltitle or fields.volume or fields.number or fields.pages %>
- <% if fields.journaltitle %>\textit{<< fields.journaltitle >>}<% endif %><% if fields.volume and fields.number %>, << fields.volume >>(<< fields.number >>)<% elif fields.volume %>, << fields.volume >><% endif %><% if fields.pages %>, << fields.pages >><% endif %>.
-<% endif %>
-<% if fields.doi %> DOI: \href{https://doi.org/<< fields.doi >>}{<< fields.doi >>}.<% endif %>
+<%- if authors -%>
+<%- if authors|length > et_al_limit -%>
+<<- authors[:et_al_limit]|join(", ") ->>, \textit{et al.}
+<%- else -%>
+<<- authors|join(", ") ->>
+<%- endif -%>.
+<%- endif -%>
+<%- if fields.year -%> (<<- fields.year ->>).<%- endif -%>
+<%- if fields.title -%> <<- fields.title ->>.<%- endif -%>
+<%- if fields.journaltitle or fields.volume or fields.number or fields.pages -%>
+ <%- if fields.journaltitle -%>\textit{<<- fields.journaltitle ->>}<%- endif -%><%- if fields.volume and fields.number -%>, <<- fields.volume ->>(<<- fields.number ->>)<%- elif fields.volume -%>, <<- fields.volume ->><%- endif -%><%- if fields.pages -%>, <<- fields.pages ->><%- endif -%>.
+<%- endif -%>
+<%- if fields.doi -%> DOI: \href{https://doi.org/<<- fields.doi ->>}{<<- fields.doi ->>}.<%- endif -%>
 """.strip()
 
 
@@ -317,14 +333,9 @@ def _bibliography_template_env() -> Environment:
 
 
 def _cleanup_bibliography_latex(text: str) -> str:
-    compact = " ".join(text.split())
-    compact = re.sub(r"\s+([,.;])", r"\1", compact)
-    # Prefer typographic en dash for numeric ranges (pages, years, etc.).
-    compact = re.sub(r"(?<=\d)-(?=\d)", "\u2013", compact)
-    compact = compact.replace("( ", "(").replace(" )", ")")
-    if compact and not compact.endswith("."):
-        compact += "."
-    return compact
+    # Keep bibliography output stable with upstream biber/biblatex formatting.
+    # Only trim outer whitespace introduced by template block layout.
+    return text.strip()
 
 
 def format_bibliography_entry(
@@ -334,12 +345,16 @@ def format_bibliography_entry(
 ) -> str:
     fields = entry_data.get("fields", {})
     authors = [a for a in entry_data.get("authors", []) if a]
+    author_names = [
+        a for a in entry_data.get("author_names", []) if isinstance(a, dict) and a
+    ]
     env = _bibliography_template_env()
     compiled = env.from_string(template or DEFAULT_BIB_TEMPLATE)
     if et_al_limit <= 0:
         et_al_limit = 3
     rendered = compiled.render(
         authors=authors,
+        author_names=author_names,
         fields=fields,
         et_al_limit=et_al_limit,
     )

@@ -31,6 +31,36 @@ def test_inline_styles_emit_runs():
     assert italic_runs
 
 
+def test_textup_clears_italic_within_textit_scope():
+    _reset_router()
+    latex.run(r"{\textit{A \textup{B} C}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.italic for run in runs)
+    assert any("B" in run.text and not run.italic for run in runs)
+    assert any("C" in run.text and run.italic for run in runs)
+
+
+def test_textmd_clears_bold_within_textbf_scope():
+    _reset_router()
+    latex.run(r"{\textbf{A \textmd{B} C}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.bold for run in runs)
+    assert any("B" in run.text and not run.bold for run in runs)
+    assert any("C" in run.text and run.bold for run in runs)
+
+
+def test_textnormal_clears_bold_and_italic_in_styled_scope():
+    _reset_router()
+    latex.run(r"{\textbf{\textit{A \textnormal{B} C}}}")
+    para = latex.doc.paragraphs[0]
+    runs = [run for run in para.runs if run.text and run.text.strip()]
+    assert any("A" in run.text and run.bold and run.italic for run in runs)
+    assert any("B" in run.text and not run.bold and not run.italic for run in runs)
+    assert any("C" in run.text and run.bold and run.italic for run in runs)
+
+
 def test_cite_produces_inline_reference():
     _reset_router()
     latex.context['cite_order'] = {"Foo2025": 7}
@@ -84,6 +114,12 @@ def test_textbackslash_renders_literal_backslash():
     assert latex.doc.paragraphs[0].text == r"Path: C:\Users\name"
 
 
+def test_textasciitilde_renders_literal_tilde():
+    _reset_router()
+    latex.run(r"A\textasciitilde{}B")
+    assert latex.doc.paragraphs[0].text == "A~B"
+
+
 def test_double_backslash_percent_keeps_tex_behavior():
     _reset_router()
     latex.run(r"Prefix\\%comment")
@@ -96,6 +132,36 @@ def test_tex_quotes_are_preserved_in_text_stream():
     _reset_router()
     latex.run("He said: ``Hello'' and left.")
     assert latex.doc.paragraphs[0].text == "He said: ``Hello'' and left."
+
+
+def test_dash_conversion_is_consistent_between_parsed_nodes_and_fragments():
+    _reset_router()
+    latex.run(r"\paragraph{A} C--D")
+    # In parsed command/body nodes, '--' can normalize to en dash.
+    assert "C–D" in latex.doc.paragraphs[0].text
+
+    # Fragment rendering should match parsed-node behavior.
+    p = latex.add_paragraph_for_role("body")
+    latex.render_latex_fragment("C--D", paragraph=p)
+    assert "C–D" in latex.doc.paragraphs[-1].text
+
+
+def test_render_latex_fragment_preserves_spaces_and_tie_with_dash_ligature():
+    _reset_router()
+    p = latex.add_paragraph_for_role("body")
+    latex.render_latex_fragment(
+        r"Figure 1~--~Deep water cycle (arrows): subduction, storage, and degassing.",
+        paragraph=p,
+    )
+    text = latex.doc.paragraphs[-1].text
+    assert "Figure 1\u00A0–\u00A0Deep water cycle" in text
+    assert "storage, and degassing." in text
+
+
+def test_textquote_commands_render_typographic_quotes():
+    _reset_router()
+    latex.run(r"He said: \textquotedblleft Hello\textquotedblright.")
+    assert latex.doc.paragraphs[0].text == "He said: “Hello”."
 
 
 def test_double_backslash_linebreak_keeps_neighboring_text():

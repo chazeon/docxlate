@@ -12,12 +12,12 @@ def apply_text_span_style(run, span: TextSpan):
     apply_theme_font(run, span.style.theme or "minor")
     if span.style.monospace:
         run.font.name = "Courier New"
-    if span.style.bold:
-        run.bold = True
-    if span.style.italic:
-        run.italic = True
-    if span.style.small_caps:
-        run.font.small_caps = True
+    if span.style.bold is not None:
+        run.bold = span.style.bold
+    if span.style.italic is not None:
+        run.italic = span.style.italic
+    if span.style.small_caps is not None:
+        run.font.small_caps = span.style.small_caps
     if span.style.color:
         try:
             run.font.color.rgb = RGBColor.from_string(span.style.color)
@@ -32,12 +32,9 @@ def new_run_properties_for_span(span: TextSpan, *, default_char_role: str | None
         r_style = OxmlElement("w:rStyle")
         r_style.set(qn("w:val"), char_role)
         r_pr.append(r_style)
-    if span.style.bold:
-        r_pr.append(OxmlElement("w:b"))
-    if span.style.italic:
-        r_pr.append(OxmlElement("w:i"))
-    if span.style.small_caps:
-        r_pr.append(OxmlElement("w:smallCaps"))
+    _append_on_off(r_pr, "w:b", span.style.bold)
+    _append_on_off(r_pr, "w:i", span.style.italic)
+    _append_on_off(r_pr, "w:smallCaps", span.style.small_caps)
     if span.style.color:
         color = OxmlElement("w:color")
         color.set(qn("w:val"), span.style.color)
@@ -57,3 +54,12 @@ def _new_fonts_element(span: TextSpan):
     r_fonts.set(qn("w:asciiTheme"), f"{val}Ascii")
     r_fonts.set(qn("w:hAnsiTheme"), f"{val}HAnsi")
     return r_fonts
+
+
+def _append_on_off(r_pr, tag: str, value: bool | None):
+    if value is None:
+        return
+    elem = OxmlElement(tag)
+    if not value:
+        elem.set(qn("w:val"), "0")
+    r_pr.append(elem)

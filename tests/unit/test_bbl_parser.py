@@ -11,19 +11,23 @@ def test_parse_bbl_extracts_entries_and_fields():
     key_a = entries["KeyA"]
     assert key_a["type"] == "article"
     assert key_a["fields"]["title"] == "A sample article"
-    assert key_a["fields"]["pages"] == "10-20"
+    assert key_a["fields"]["pages"] == r"10\bibrangedash 20"
     assert key_a["fields"]["doi"] == "10.1000/example"
     assert key_a["authors"][:2] == ["Doe, Jane", "Roe, John"]
+    assert key_a["author_names"][0]["family"] == "Doe"
+    assert key_a["author_names"][0]["given"] == "Jane"
 
 
 def test_format_bibliography_entry_contains_core_parts():
     entries = parse_bbl(Path("tests/fixtures/bbl/sample.bbl"))
     formatted = format_bibliography_entry(entries["KeyA"])
+    assert "\n" not in formatted
+    assert "  " not in formatted
     assert "Doe, Jane, Roe, John" in formatted
     assert "(2024)" in formatted
     assert "A sample article" in formatted
     assert r"\textit{J. Testing}" in formatted
-    assert "10–20" in formatted
+    assert r"10\bibrangedash 20" in formatted
     assert r"\href{https://doi.org/10.1000/example}{10.1000/example}" in formatted
 
 
@@ -69,4 +73,85 @@ def test_format_bibliography_entry_supports_custom_template():
         entry,
         template=r"<< authors|join('; ') >> :: << fields.title >>",
     )
-    assert formatted == "A, One :: My Title."
+    assert formatted == "A, One :: My Title"
+
+
+def test_format_bibliography_entry_exposes_structured_author_names():
+    entry = {
+        "authors": ["Zhang, Zhen"],
+        "author_names": [
+            {
+                "family": "Zhang",
+                "familyi": r"Z\bibinitperiod",
+                "given": "Zhen",
+                "giveni": r"Z\bibinitperiod",
+            }
+        ],
+        "fields": {"title": "My Title"},
+    }
+    formatted = format_bibliography_entry(
+        entry,
+        template=r"<< author_names[0].family >>, << author_names[0].giveni >> :: << fields.title >>",
+    )
+    assert formatted == r"Zhang, Z\bibinitperiod :: My Title"
+
+
+def test_parse_bbl_exposes_all_author_name_parts(tmp_path):
+    bbl = tmp_path / "names.bbl"
+    bbl.write_text(
+        r"""
+\refsection{0}
+\entry{KeyN}{article}{}
+\name{author}{1}{}{%
+  {{hash=a}{family={Zhang},familyi={Z\bibinitperiod},given={Zhen},giveni={Z\bibinitperiod}}}%
+}
+\field{title}{Name Test}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+    entries = parse_bbl(bbl)
+    author = entries["KeyN"]["author_names"][0]
+    assert author["family"] == "Zhang"
+    assert author["familyi"] == r"Z\bibinitperiod"
+    assert author["given"] == "Zhen"
+    assert author["giveni"] == r"Z\bibinitperiod"
+
+
+def test_format_bibliography_entry_does_not_mutate_doi_hyphens():
+    entry = {
+        "authors": ["A, One"],
+        "fields": {
+            "year": "2026",
+            "journaltitle": "Journal X",
+            "pages": "223-253",
+            "doi": "10.1016/0009-2541(94)00140-4",
+        },
+    }
+    formatted = format_bibliography_entry(entry)
+    assert "223-253" in formatted
+    assert (
+        r"\href{https://doi.org/10.1016/0009-2541(94)00140-4}"
+        r"{10.1016/0009-2541(94)00140-4}"
+    ) in formatted
+
+
+def test_parse_bbl_preserves_tex_tokens_in_field_values(tmp_path):
+    bbl = tmp_path / "tokens.bbl"
+    bbl.write_text(
+        r"""
+\refsection{0}
+\entry{KeyTok}{article}{}
+\field{title}{CO$_2$ and \textit{A\_B}}
+\field{url}{https://example.com/a-b}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+    entries = parse_bbl(bbl)
+    title = entries["KeyTok"]["fields"]["title"]
+    assert r"CO$_2$" in title
+    assert r"\textit{" in title
+    assert r"\_" in title

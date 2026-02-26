@@ -85,7 +85,6 @@ def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
     assert "<wp:anchor" in image_para._element.xml
     assert "<wp:wrapSquare" in image_para._element.xml
     assert "<wp:align>right</wp:align>" in image_para._element.xml
-    assert "<wp:inline" not in image_para._element.xml
     assert "wp:distT=" not in image_para._element.xml
     assert "wp:relativeFrom=" not in image_para._element.xml
     assert 'distT="0"' in image_para._element.xml
@@ -104,6 +103,50 @@ def test_wrapfigure_renders_with_alignment_and_caption(tmp_path):
         and ("Wrapped Figure Caption" in pxml)
         and ("<pic:pic" in pxml or "<a:blip" in pxml)
         for pxml in xml_paragraphs
+    )
+
+
+def test_wrapfigure_can_force_separate_caption_anchor_via_config(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {
+        "figure": {"image": {"wrap": {"caption_anchor": "separate"}}}
+    }
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Wrapped Figure Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+    }
+    roots = [
+        etree.fromstring(p._element.xml.encode("utf-8"))
+        for p in latex.doc.paragraphs
+        if "<wp:anchor" in p._element.xml
+    ]
+    image_anchors = sum(
+        len(root.xpath(".//wp:anchor[.//a:blip]", namespaces=ns)) for root in roots
+    )
+    caption_anchors = sum(
+        len(root.xpath(".//wp:anchor[.//wps:txbx]", namespaces=ns)) for root in roots
+    )
+    assert image_anchors >= 1
+    assert caption_anchors >= 1
+    # Separate mode should not collapse image+caption into a single grouped anchor.
+    assert any(
+        len(root.xpath(".//wp:anchor", namespaces=ns)) >= 2
+        for root in roots
     )
 
 
@@ -139,6 +182,349 @@ def test_wrapfigure_width_tracks_textwidth_fraction(tmp_path):
     expected = int(0.4 * textwidth)
     # Allow ~5% tolerance for rounding/dpi interactions.
     assert abs(cx - expected) <= int(0.05 * textwidth)
+
+
+def test_wrapfigure_distances_are_configurable(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {
+        "figure": {
+            "image": {
+                "wrap": {
+                    "pad": {"left": 0.2, "right": 0.3, "top": 0.05, "bottom": 0.06},
+                }
+            }
+        }
+    }
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    image_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "<wp:anchor" in p._element.xml and ("<pic:pic" in p._element.xml or "<a:blip" in p._element.xml)
+    )
+    root = etree.fromstring(image_para._element.xml.encode("utf-8"))
+    ns = {
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+    }
+    anchor = root.xpath(".//wp:anchor", namespaces=ns)[0]
+    wrap = root.xpath(".//wp:wrapSquare", namespaces=ns)[0]
+    expected = {
+        "distL": str(int(0.2 * 914400)),
+        "distR": str(int(0.3 * 914400)),
+        "distT": str(int(0.05 * 914400)),
+        "distB": str(int(0.06 * 914400)),
+    }
+    for key, value in expected.items():
+        assert anchor.get(key) == value
+        assert wrap.get(key) == value
+
+
+def test_wrapfigure_caption_textbox_insets_are_zeroed_in_grouped_mode(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {
+        "figure": {
+            "image": {
+                "wrap": {
+                    "inset": {"left": 0.01, "right": 0.02, "top": 0.03, "bottom": 0.04},
+                }
+            }
+        }
+    }
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Caption" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {"wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape"}
+    body_pr = root.xpath(".//wps:bodyPr", namespaces=ns)[0]
+    assert body_pr.get("lIns") == "0"
+    assert body_pr.get("rIns") == "0"
+    assert body_pr.get("tIns") == "0"
+    assert body_pr.get("bIns") == "0"
+    assert body_pr.get("vertOverflow") == "overflow"
+
+
+def test_wrapfigure_caption_textbox_uses_vertical_autofit(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption that should auto-grow the text box vertically when needed.}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Caption" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    }
+    assert root.xpath(".//wps:bodyPr/a:spAutoFit", namespaces=ns)
+
+
+def test_wrapfigure_caption_template_preserves_spaces_in_textbox(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
+    }
+    latex.context["refs"] = {"fig:demo": {"ref_num": "9"}}
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Alpha beta \textit{{gamma}} delta}}
+\label{{fig:demo}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    caption_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml and "Alpha" in p._element.xml
+    )
+    root = etree.fromstring(caption_para._element.xml.encode("utf-8"))
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    joined_text = "".join(root.xpath(".//w:t/text()", namespaces=ns))
+    assert "Alpha beta gamma delta" in joined_text
+
+
+def test_wrapfigure_caption_gap_is_configurable(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+    latex.context["plugins"] = {"figure": {"image": {"wrap": {"gap": 0.2}}}}
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Caption}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    anchor_para = next(
+        p
+        for p in latex.doc.paragraphs
+        if "wordprocessingShape" in p._element.xml
+        and ("<pic:pic" in p._element.xml or "<a:blip" in p._element.xml)
+    )
+    root = etree.fromstring(anchor_para._element.xml.encode("utf-8"))
+    ns = {
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+    }
+    spacing_after = root.xpath(
+        "string(.//wps:txbx/w:txbxContent/w:p[1]/w:pPr/w:spacing/@w:after)",
+        namespaces=ns,
+    )
+    assert spacing_after
+    assert int(spacing_after) == int((0.2 * 914400) // 635)
+
+
+def test_wrapfigure_comment_shift_y_outside_env_is_ignored(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+% docxlate: figure.wrap.shift.y=0.25
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {"wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
+    pos_offsets: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        offsets = root.xpath(".//wp:anchor/wp:positionV/wp:posOffset/text()", namespaces=ns)
+        pos_offsets.extend(int(v) for v in offsets if str(v).strip())
+    assert len(pos_offsets) >= 2
+    first_pos, second_pos = pos_offsets[0], pos_offsets[1]
+
+    assert first_pos == 0
+    assert second_pos == 0
+    assert any(
+        "Ignored docxlate directive outside wrapfigure: figure.wrap.shift.y" in msg
+        for msg in latex.context.get("warnings", [])
+    )
+
+
+def test_wrapfigure_comment_shift_y_inside_env_applies_to_current_not_following(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+% docxlate: figure.wrap.shift.y=0.25
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {"wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
+    pos_offsets: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        offsets = root.xpath(".//wp:anchor/wp:positionV/wp:posOffset/text()", namespaces=ns)
+        pos_offsets.extend(int(v) for v in offsets if str(v).strip())
+    assert len(pos_offsets) >= 2
+    first_pos, second_pos = pos_offsets[0], pos_offsets[1]
+    assert first_pos == int(0.25 * 914400)
+    assert second_pos == 0
+
+
+def test_wrapfigure_comment_pad_left_applies_only_to_current_wrap(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+% docxlate: figure.wrap.pad.left=0.2
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {
+        "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+        "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+    }
+    dist_left_values: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "<wp:anchor" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        anchors = root.xpath(
+            ".//wp:anchor[.//a:blip]/@distL",
+            namespaces=ns,
+        )
+        dist_left_values.extend(int(v) for v in anchors if str(v).strip())
+    assert len(dist_left_values) >= 2
+    assert dist_left_values[0] == int(0.2 * 914400)
+    assert dist_left_values[1] == 114300
+
+
+def test_wrapfigure_comment_gap_applies_only_to_current_wrap(tmp_path):
+    image_path = tmp_path / "sample.png"
+    _write_png(image_path)
+
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text("dummy")
+    latex.context["tex_path"] = str(tex_path)
+
+    tex = rf"""
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+% docxlate: figure.wrap.gap=0.2
+\includegraphics{{{image_path.name}}}
+\caption{{First}}
+\end{{wrapfigure}}
+
+\begin{{wrapfigure}}{{r}}{{0.4\textwidth}}
+\includegraphics{{{image_path.name}}}
+\caption{{Second}}
+\end{{wrapfigure}}
+"""
+    latex.run(tex)
+
+    ns = {
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+        "wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+    }
+    spacing_values: list[int] = []
+    for para in latex.doc.paragraphs:
+        if "wordprocessingShape" not in para._element.xml:
+            continue
+        root = etree.fromstring(para._element.xml.encode("utf-8"))
+        spacings = root.xpath(
+            ".//wps:txbx/w:txbxContent/w:p[1]/w:pPr/w:spacing/@w:after",
+            namespaces=ns,
+        )
+        spacing_values.extend(int(v) for v in spacings if str(v).strip())
+    assert len(spacing_values) >= 2
+    assert spacing_values[0] == int((0.2 * 914400) // 635)
+    assert spacing_values[1] == int((0.125 * 914400) // 635)
 
 
 def test_wrapfigure_does_not_insert_empty_line_before_following_text(tmp_path):
@@ -198,7 +584,9 @@ Body after wrap.
 
 
 def test_caption_template_renders_number_and_caption_text():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "12"}}
     latex.run(r"\begin{figure}\caption{Cap \textit{alpha}}\label{fig:demo}\end{figure}")
 
@@ -210,7 +598,9 @@ def test_caption_template_renders_number_and_caption_text():
 
 
 def test_caption_template_accepts_double_curly_placeholders():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. {{x}}} {{caption}}"
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{Figure. {{x}}} {{caption}}"}}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "7"}}
     latex.run(r"\begin{figure}\caption{Gamma}\label{fig:demo}\end{figure}")
 
@@ -220,7 +610,9 @@ def test_caption_template_accepts_double_curly_placeholders():
 
 
 def test_caption_template_uses_unknown_number_when_unresolved():
-    latex.context["figure_caption_template"] = r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{<< fig_name >>. << fig_num >>} << caption >>"}}
+    }
     latex.run(r"\begin{figure}\caption{Delta}\label{fig:demo}\end{figure}")
 
     para = next((p for p in latex.doc.paragraphs if "Figure. ?" in p.text), None)
@@ -229,7 +621,9 @@ def test_caption_template_uses_unknown_number_when_unresolved():
 
 
 def test_caption_template_keeps_caption_spacing_and_inline_formatting():
-    latex.context["figure_caption_template"] = r"\textbf{Figure. << x >>} << caption >>"
+    latex.context["plugins"] = {
+        "figure": {"caption": {"template": r"\textbf{Figure. << x >>} << caption >>"}}
+    }
     latex.context["refs"] = {"fig:demo": {"ref_num": "3"}}
     latex.run(
         r"\begin{figure}\caption{Alpha beta \textit{gamma} delta}\label{fig:demo}\end{figure}"

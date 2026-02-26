@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from docxlate.handlers import latex
 
@@ -99,6 +100,16 @@ def test_href_bold_equivalent_for_both_nesting_orders():
     assert xml.count("<w:b/>") + xml.count("<w:b ") >= 2
 
 
+def test_href_mdseries_emits_explicit_bold_reset_in_bold_scope():
+    latex.run(r"{\bfseries \href{https://example.com}{{\mdseries Link}}}")
+
+    para = latex.doc.paragraphs[0]
+    assert "Link" in para.text
+    xml = para._element.xml
+    assert "w:hyperlink" in xml
+    assert '<w:b w:val="0"' in xml
+
+
 def test_nested_hyperlinks_raise_error():
     with pytest.raises(RuntimeError, match="Nested hyperlinks are not supported"):
         latex.run(r"\href{https://a.example}{Outer \href{https://b.example}{Inner}}")
@@ -115,3 +126,105 @@ def test_invalid_href_target_is_rendered_as_plain_text_without_relationship():
     assert not any("plasTeX.TeXFragment" in getattr(rel, "target_ref", "") for rel in rels.values())
     warnings = latex.context.get("warnings", [])
     assert any("Skipped invalid hyperlink target" in w for w in warnings)
+
+
+def test_bibliography_e2e_from_bbl_file_handles_tokens(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyA}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyA}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        Path("tests/fixtures/bbl/sample.bbl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "template"
+    ] = r"\textquotedblleft{}<< fields.title >>\textquotedblright{} << fields.pages >>."
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "“A sample article”" in text
+    assert "10–20" in text
+    bib_para = next(p for p in latex.doc.paragraphs if "A sample article" in p.text)
+    bib_xml = bib_para._element.xml
+    assert "“" in bib_xml
+    assert "”" in bib_xml
+
+
+def test_bibliography_template_raw_tex_quotes_e2e(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyA}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyA}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        Path("tests/fixtures/bbl/sample.bbl").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "template"
+    ] = r"``<< fields.title >>''."
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "“A sample article”." in text
+
+
+def test_bibliography_name_macro_default_renders_bibinitperiod(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyN}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyN}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        r"""
+\refsection{0}
+\entry{KeyN}{article}{}
+\name{author}{1}{}{%
+  {{hash=a}{family={Zhang},given={Zhen},giveni={Z\bibinitperiod}}}%
+}
+\field{title}{Name Test}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "template"
+    ] = r"<< author_names[0].family >>, << author_names[0].giveni >>."
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "Zhang, Z." in text
+
+
+def test_bibliography_name_macro_replacement_is_configurable(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyN}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(r"\abx@aux@cite{0}{KeyN}", encoding="utf-8")
+    (tmp_path / "doc.bbl").write_text(
+        r"""
+\refsection{0}
+\entry{KeyN}{article}{}
+\name{author}{1}{}{%
+  {{hash=a}{family={Zhang},given={Zhen},giveni={Z\bibinitperiod}}}%
+}
+\field{title}{Name Test}
+\endentry
+\endrefsection
+""".strip(),
+        encoding="utf-8",
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "macro_replacements"
+    ] = {"bibinitperiod": "·"}
+    latex.context.setdefault("plugins", {}).setdefault("bibliography", {})[
+        "template"
+    ] = r"<< author_names[0].family >>, << author_names[0].giveni >>."
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "Zhang, Z·" in text
