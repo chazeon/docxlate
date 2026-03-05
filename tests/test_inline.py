@@ -195,8 +195,9 @@ def test_simple_script_math_uses_nonempty_omml_base():
     latex.run(r"CO$_2$ and D$^2$")
     para = latex.doc.paragraphs[0]
     xml = para._element.xml
-    if "<math" in para.text:
-        # OMML path unavailable locally (missing XSL); keep test non-flaky.
+    warnings = latex.context.get("warnings", [])
+    if any("Math OMML conversion unavailable" in w for w in warnings):
+        # OMML transform unavailable locally; fallback keeps math as raw LaTeX.
         return
     assert "<m:sSub>" in xml
     assert "<m:sSup>" in xml

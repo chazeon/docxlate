@@ -47,16 +47,20 @@ def inject_omml(
         mathml = latex2mathml.converter.convert(latex_str)
         mathml_element = etree.fromstring(mathml.encode("utf-8"))
         if not xsl_path:
-            run = paragraph.add_run(mathml)
-            _apply_text_run_style(run, style)
-            _apply_text_run_color(run, color)
+            _append_math_fallback_as_omml(
+                paragraph,
+                _fallback_math_text(latex_str=latex_str, mathml=mathml, display=display),
+                display=display,
+                color=color,
+                style=style,
+            )
             return False
         transform = _get_mathml_to_omml_transform(xsl_path)
         omml_result = transform(mathml_element)
         # Never let post-processing break core math rendering.
         try:
             _normalize_omml_script_bases(omml_result)
-            _apply_native_math_run_properties(omml_result, color=color)
+            _apply_native_math_run_properties(omml_result, color=color, style=style)
             _apply_native_nary_control_properties(omml_result, color=color)
         except Exception:
             pass
@@ -69,14 +73,29 @@ def inject_omml(
     except Exception:
         # Fallback to MathML text for inspection instead of opaque error tags.
         try:
-            run = paragraph.add_run(latex2mathml.converter.convert(latex_str))
-            _apply_text_run_style(run, style)
-            _apply_text_run_color(run, color)
+            mathml = latex2mathml.converter.convert(latex_str)
+            _append_math_fallback_as_omml(
+                paragraph,
+                _fallback_math_text(latex_str=latex_str, mathml=mathml, display=display),
+                display=display,
+                color=color,
+                style=style,
+            )
         except Exception:
-            run = paragraph.add_run(latex_str)
-            _apply_text_run_style(run, style)
-            _apply_text_run_color(run, color)
+            _append_math_fallback_as_omml(
+                paragraph,
+                latex_str,
+                display=display,
+                color=color,
+                style=style,
+            )
         return False
+
+
+def _fallback_math_text(*, latex_str: str, mathml: str, display: bool) -> str:
+    # Preserve LaTeX in both inline and display fallback paths so users can
+    # use Word's equation UI conversion/editing workflow directly.
+    return latex_str
 
 
 def _normalize_omml_script_bases(omml_root) -> None:
@@ -116,7 +135,9 @@ def _apply_text_run_style(run, style: StyleState | None) -> None:
         run.font.small_caps = style.small_caps
 
 
-def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
+def _apply_native_math_run_properties(
+    omml_root, *, color: str | None, style: StyleState | None = None
+) -> None:
     """
     Match Word-native pattern observed in edited DOCX:
     each m:r carries a direct w:rPr child (with Cambria Math fonts,
@@ -153,6 +174,7 @@ def _apply_native_math_run_properties(omml_root, *, color: str | None) -> None:
         if r_fonts.get(qn("w:hAnsi")) is None:
             r_fonts.set(qn("w:hAnsi"), "Cambria Math")
 
+        _apply_word_text_style_to_rpr(w_rpr, style)
         if not color:
             continue
         w_color = w_rpr.find(_wtag("color"))
@@ -192,6 +214,54 @@ def _apply_native_nary_control_properties(omml_root, *, color: str | None) -> No
             w_color = etree.Element(qn("w:color"))
             w_rpr.append(w_color)
         w_color.set(qn("w:val"), color)
+
+
+def _append_math_fallback_as_omml(
+    paragraph,
+    text: str,
+    *,
+    display: bool,
+    color: str | None,
+    style: StyleState | None,
+) -> None:
+    omml_node = _build_fallback_math_omml(text, display=display)
+    _apply_native_math_run_properties(omml_node, color=color, style=style)
+    omml_xml = etree.tostring(omml_node, encoding="utf-8")
+    paragraph._element.append(parse_xml(omml_xml))
+
+
+def _build_fallback_math_omml(text: str, *, display: bool):
+    o_math = etree.Element(f"{{{OMML_NAMESPACE}}}oMath")
+    m_run = etree.Element(f"{{{OMML_NAMESPACE}}}r")
+    m_text = etree.Element(f"{{{OMML_NAMESPACE}}}t")
+    m_text.text = text
+    m_run.append(m_text)
+    o_math.append(m_run)
+    if display:
+        return _wrap_display_omath(o_math)
+    return o_math
+
+
+def _apply_word_text_style_to_rpr(w_rpr, style: StyleState | None) -> None:
+    if style is None:
+        return
+    _append_on_off_prop(w_rpr, "b", style.bold)
+    _append_on_off_prop(w_rpr, "i", style.italic)
+    _append_on_off_prop(w_rpr, "smallCaps", style.small_caps)
+
+
+def _append_on_off_prop(w_rpr, prop: str, value: bool | None) -> None:
+    if value is None:
+        return
+    tag = _wtag(prop)
+    elem = w_rpr.find(tag)
+    if elem is None:
+        elem = etree.Element(qn(f"w:{prop}"))
+        w_rpr.append(elem)
+    if value:
+        elem.attrib.pop(qn("w:val"), None)
+    else:
+        elem.set(qn("w:val"), "0")
 
 
 def _wtag(local: str) -> str:

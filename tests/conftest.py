@@ -10,11 +10,13 @@ OFFICE_XSL_CANDIDATES = [
 
 
 def _resolve_xsl_path() -> Path | None:
-    env_path = Path(__import__("os").environ.get("DOCXLATE_MML2OMML_XSL", "")).expanduser()
-    if str(env_path) and env_path.exists():
-        return env_path
+    env_raw = __import__("os").environ.get("DOCXLATE_MML2OMML_XSL")
+    if env_raw:
+        env_path = Path(env_raw).expanduser()
+        if env_path.is_file():
+            return env_path
     for p in OFFICE_XSL_CANDIDATES:
-        if p.exists():
+        if p.is_file():
             return p
     return None
 

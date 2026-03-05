@@ -1,6 +1,7 @@
 from __future__ import annotations
 from contextlib import contextmanager
 from collections.abc import Mapping
+from pathlib import Path
 
 from docx.oxml.ns import qn
 from docx.shared import Inches
@@ -70,6 +71,7 @@ class DocxEmitterBackend:
 
     def emit_equation(self, paragraph, spec: EquationSpec):
         xsl_path = self.context.get("mathml2omml_xsl_path")
+        xsl_missing = self._is_missing_xsl_path(xsl_path)
         ok = inject_omml(
             paragraph,
             spec.latex,
@@ -78,8 +80,11 @@ class DocxEmitterBackend:
             display=spec.display,
             style=spec.style,
         )
-        if not ok and not xsl_path:
-            self._warn_missing_math_xsl()
+        if not ok and xsl_missing:
+            if xsl_path:
+                self._warn_missing_math_xsl_path(str(xsl_path))
+            else:
+                self._warn_missing_math_xsl()
         if spec.number:
             run = paragraph.add_run(f" ({spec.number})")
             apply_theme_font(run, "minor")
@@ -321,12 +326,29 @@ class DocxEmitterBackend:
 
     def _warn_missing_math_xsl(self):
         msg = (
-            "Math OMML stylesheet path is not configured "
-            "(set mathml2omml_xsl_path in config)."
+            "Math OMML conversion unavailable: mathml2omml.xsl is not configured "
+            "(set mathml2omml_xsl_path in config). Falling back to MathML or LaTeX text."
         )
         warnings = self.context.setdefault("warnings", [])
         if msg not in warnings:
             warnings.append(msg)
+
+    def _warn_missing_math_xsl_path(self, xsl_path: str):
+        msg = (
+            "Math OMML conversion unavailable: configured mathml2omml_xsl_path "
+            f"does not exist ({xsl_path}). Falling back to MathML or LaTeX text."
+        )
+        warnings = self.context.setdefault("warnings", [])
+        if msg not in warnings:
+            warnings.append(msg)
+
+    def _is_missing_xsl_path(self, xsl_path: str | None) -> bool:
+        if not xsl_path:
+            return True
+        try:
+            return not Path(xsl_path).expanduser().is_file()
+        except Exception:
+            return True
 
     def _resolve_paragraph_style(self, doc, role: str | None, style_table: dict | None):
         if not role or not style_table:

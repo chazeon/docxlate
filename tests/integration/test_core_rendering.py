@@ -105,11 +105,28 @@ def test_equation_in_color_scope_keeps_equation_rendered():
 def test_equation_nary_operator_receives_scoped_color():
     latex.run(r"{\color{red}\begin{equation}\int_0^1 f(x)\,dx = 1\end{equation}}")
     para_xml = latex.doc.paragraphs[0]._element.xml
-    if "<math" in latex.doc.paragraphs[0].text:
+    warnings = latex.context.get("warnings", [])
+    if any("Math OMML conversion unavailable" in w for w in warnings):
+        # Missing/invalid OMML XSL fallback path cannot validate n-ary OMML internals.
         return
     assert "<m:naryPr>" in para_xml
     assert "<m:ctrlPr>" in para_xml
     assert 'w:color w:val="FF0000"' in para_xml
+
+
+def test_missing_math_xsl_path_falls_back_without_breaking_flow():
+    latex.context["mathml2omml_xsl_path"] = "/tmp/does-not-exist-mathml2omml.xsl"
+    latex.context["refs"] = {"eq:emc": {"ref_num": "1.2"}}
+    latex.run(r"\begin{equation}E=mc^2\label{eq:emc}\end{equation} After equation.")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    para_xml = latex.doc.paragraphs[0]._element.xml
+    assert "After equation." in text
+    assert "(1.2)" in text
+    assert "<m:oMath" in para_xml
+    assert "E=mc^2" in para_xml
+    warnings = latex.context.get("warnings", [])
+    assert any("Math OMML conversion unavailable" in w for w in warnings)
 
 
 def test_math_runs_do_not_emit_duplicate_run_property_branches():
