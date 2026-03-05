@@ -60,6 +60,14 @@ def test_color_declaration_applies_to_inline_math_and_not_following_text():
     assert any("Y" in run.text and run.font.color.rgb is None for run in runs)
 
 
+def test_textcolor_renders_only_payload_text_with_color():
+    latex.run(r"\textcolor{red}{Hello}")
+    para = latex.doc.paragraphs[0]
+    runs = _nonempty_runs(para)
+    assert para.text.strip() == "Hello"
+    assert any("Hello" in run.text and run.font.color.rgb is not None for run in runs)
+
+
 def test_paragraph_runin_body_emits_explicit_bold_reset():
     latex.run(r"\paragraph{Title} body")
     para = latex.doc.paragraphs[0]

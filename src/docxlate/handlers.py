@@ -30,6 +30,11 @@ class Color(Command):
     args = "color:str"
 
 
+class Textcolor(Command):
+    macroName = "textcolor"
+    args = "color:str self"
+
+
 class Needspace(Command):
     macroName = "Needspace"
     args = "len:str"
@@ -37,6 +42,7 @@ class Needspace(Command):
 
 latex.macro("and", And)
 latex.macro("color", Color)
+latex.macro("textcolor", Textcolor)
 latex.macro("Needspace", Needspace)
 
 
@@ -291,6 +297,19 @@ def handle_indent(_node):
 def handle_needspace(_node):
     # Layout hint for TeX pagination; no-op for DOCX output.
     return
+
+
+@latex.command("textcolor", inline=True)
+def handle_textcolor(node):
+    color = latex.get_arg_text(node, 0, key="color")
+    text_fragment = getattr(node, "attributes", {}).get("self")
+    style = {"color": color} if color else None
+    if text_fragment is not None and getattr(text_fragment, "childNodes", None):
+        latex.render_nodes(text_fragment.childNodes, style=style)
+        return
+    text = latex.get_arg_text(node, 1, key="self")
+    if text:
+        latex.append_inline(text, style=style)
 
 
 @latex.command("paragraph", inline=True)

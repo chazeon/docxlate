@@ -208,6 +208,24 @@ Hello no fallback.
     assert not any("body-only parse fallback" in w for w in warnings)
 
 
+def test_parse_retries_with_xcolor_skipped_before_body_fallback():
+    tex = r"""
+\documentclass{article}
+\usepackage{xcolor}
+\newcommand{\origtext}[1]{\begingroup\color{gray}#1\endgroup}
+\begin{document}
+\origtext{Hello retry path.}
+\end{document}
+"""
+    latex.run(tex)
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "Hello retry path." in text
+    warnings = latex.context.get("warnings", [])
+    assert any("Skipped usepackage for parser compatibility: xcolor" in w for w in warnings)
+    assert not any("body-only parse fallback" in w for w in warnings)
+
+
 def test_preamble_only_parse_with_text_nodes_triggers_body_fallback():
     # Combination crafted to produce noisy preamble parse while leaving body intact.
     tex = r"""

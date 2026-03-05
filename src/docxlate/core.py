@@ -201,34 +201,49 @@ class LatexBridge:
         self.handle_event("post_process")
 
     def _parse_source(self, tex_source):
-        parse_source = self._sanitize_source_for_parse(tex_source)
+        configured_skip_packages = {
+            str(p).strip()
+            for p in (self.context.get("parse_skip_packages") or [])
+            if str(p).strip()
+        }
+        auto_skip_xcolor = (
+            "xcolor" not in configured_skip_packages
+            and self._source_uses_package(tex_source, "xcolor")
+            and self._source_uses_color_declaration(tex_source)
+        )
+        parse_source = self._sanitize_source_for_parse(
+            tex_source,
+            extra_skip_packages={"xcolor"} if auto_skip_xcolor else None,
+        )
         parsed = None
         parse_error = None
         try:
-            tex = DocxlateTeX()
-            for macro_name, macro_class in self.macro_handlers.items():
-                tex.ownerDocument.context.addGlobal(macro_name, macro_class)
-            tex.input(parse_source)
-            parsed = tex.parse()
-            macro_ctx = tex.ownerDocument.context.contexts[-1]
-            self.context["_parse_macro_context"] = dict(macro_ctx)
+            parsed = self._parse_with_registered_macros(parse_source)
         except Exception as exc:
             parse_error = exc
+
+        should_retry_with_xcolor_skip = (
+            parsed is None
+            and "xcolor" not in configured_skip_packages
+            and self._source_uses_package(tex_source, "xcolor")
+        )
+        if should_retry_with_xcolor_skip:
+            retry_source = self._sanitize_source_for_parse(
+                tex_source, extra_skip_packages={"xcolor"}
+            )
+            if retry_source != parse_source:
+                try:
+                    parsed = self._parse_with_registered_macros(retry_source)
+                    parse_source = retry_source
+                except Exception:
+                    pass
 
         if parsed is None:
             if "\\begin{document}" in parse_source:
                 body = self._extract_document_body(parse_source)
                 if body is not None:
-                    fallback_tex = DocxlateTeX()
-                    for macro_name, macro_class in self.macro_handlers.items():
-                        fallback_tex.ownerDocument.context.addGlobal(
-                            macro_name, macro_class
-                        )
-                    fallback_tex.input(body)
-                    fallback_parsed = fallback_tex.parse()
-                    macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
-                    self.context["_parse_macro_context"] = dict(macro_ctx)
-                    self.context.setdefault("warnings", []).append(
+                    fallback_parsed = self._parse_with_registered_macros(body)
+                    self._append_warning_once(
                         f"Full LaTeX parse failed ({type(parse_error).__name__}); used body-only parse fallback."
                     )
                     return fallback_parsed
@@ -237,25 +252,59 @@ class LatexBridge:
         if self._looks_like_preamble_only(parsed) and "\\begin{document}" in parse_source:
             body = self._extract_document_body(parse_source)
             if body is not None:
-                fallback_tex = DocxlateTeX()
-                for macro_name, macro_class in self.macro_handlers.items():
-                    fallback_tex.ownerDocument.context.addGlobal(macro_name, macro_class)
-                fallback_tex.input(body)
-                fallback_parsed = fallback_tex.parse()
-                macro_ctx = fallback_tex.ownerDocument.context.contexts[-1]
-                self.context["_parse_macro_context"] = dict(macro_ctx)
-                self.context.setdefault("warnings", []).append(
+                fallback_parsed = self._parse_with_registered_macros(body)
+                self._append_warning_once(
                     "Full LaTeX parse produced no document body; used body-only parse fallback."
                 )
                 return fallback_parsed
         return parsed
 
-    def _sanitize_source_for_parse(self, tex_source: str) -> str:
+    def _parse_with_registered_macros(self, tex_source):
+        tex = DocxlateTeX()
+        for macro_name, macro_class in self.macro_handlers.items():
+            tex.ownerDocument.context.addGlobal(macro_name, macro_class)
+        tex.input(tex_source)
+        parsed = tex.parse()
+        macro_ctx = tex.ownerDocument.context.contexts[-1]
+        self.context["_parse_macro_context"] = dict(macro_ctx)
+        return parsed
+
+    def _append_warning_once(self, message: str):
+        warnings = self.context.setdefault("warnings", [])
+        if message not in warnings:
+            warnings.append(message)
+
+    def _source_uses_package(self, tex_source: str, package_name: str) -> bool:
+        usepackage_re = re.compile(
+            r"\\usepackage(?:\s*\[[^\]]*\])?\s*\{(?P<pkgs>[^}]*)\}"
+        )
+        for match in usepackage_re.finditer(tex_source):
+            raw = match.group("pkgs")
+            pkgs = [pkg.strip() for pkg in raw.split(",") if pkg.strip()]
+            if package_name in pkgs:
+                return True
+        return False
+
+    def _source_uses_color_declaration(self, tex_source: str) -> bool:
+        return bool(
+            re.search(r"\\color(?:\s*\[[^\]]*\])?\s*\{", tex_source)
+        )
+
+    def _sanitize_source_for_parse(
+        self,
+        tex_source: str,
+        *,
+        extra_skip_packages: set[str] | None = None,
+    ) -> str:
         skip_packages = set(
             p.strip()
             for p in (self.context.get("parse_skip_packages") or [])
             if str(p).strip()
         )
+        if extra_skip_packages:
+            skip_packages.update(
+                p.strip() for p in extra_skip_packages if str(p).strip()
+            )
         skip_paths = set(
             p.strip()
             for p in (self.context.get("parse_skip_usepackage_paths") or [])
@@ -286,9 +335,11 @@ class LatexBridge:
             if not removed:
                 return match.group(0)
 
-            warnings.append(
+            message = (
                 f"Skipped usepackage for parser compatibility: {', '.join(removed)}"
             )
+            if message not in warnings:
+                warnings.append(message)
             if not kept:
                 return ""
             return f"\\usepackage{opts}" + "{" + ",".join(kept) + "}"
