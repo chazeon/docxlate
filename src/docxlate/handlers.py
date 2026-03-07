@@ -1,6 +1,6 @@
 from .core import LatexBridge
 from .utils import apply_theme_font, inject_omml
-from .aux import parse_refs
+from .aux import parse_aux_artifacts
 from .extensions import (
     register_bibliography_extension,
     register_figures_extension,
@@ -399,8 +399,14 @@ def on_load(tex_source, soup):
     latex.context["_frontmatter_maketitle_seen"] = False
     aux_path = Path(tex_path).with_suffix(".aux")
     if aux_path.exists():
-        refs, _bibcites = parse_refs(aux_path)
-        latex.context["refs"] = refs
+        aux_cache = latex.context.setdefault("_aux_artifacts_cache", {})
+        cache_key = str(aux_path.resolve())
+        cached = aux_cache.get(cache_key)
+        if cached is None:
+            refs, bibcites, cite_order = parse_aux_artifacts(aux_path)
+            cached = {"refs": refs, "bibcites": bibcites, "cite_order": cite_order}
+            aux_cache[cache_key] = cached
+        latex.context["refs"] = dict(cached.get("refs", {}))
 
 
 @latex.on("post_process")

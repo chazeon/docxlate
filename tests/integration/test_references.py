@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
 
+import docxlate.handlers as handlers_module
+from docxlate.extensions.bibliography import runtime as bibliography_runtime
 from docxlate.handlers import latex
 
 
@@ -228,3 +230,34 @@ def test_bibliography_name_macro_replacement_is_configurable(tmp_path):
 
     text = "\n".join(p.text for p in latex.doc.paragraphs)
     assert "Zhang, Z·" in text
+
+
+def test_aux_artifacts_are_loaded_once_per_run(tmp_path, monkeypatch):
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(r"\cite{KeyA}.", encoding="utf-8")
+    (tmp_path / "doc.aux").write_text(
+        "\n".join(
+            [
+                r"\newlabel{sec:a}{{1}{1}}",
+                r"\bibcite{KeyA}{{1}{2026}{K}{Key Author}}",
+                r"\abx@aux@cite{0}{KeyA}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    real_parse_aux = handlers_module.parse_aux_artifacts
+    call_count = 0
+
+    def _counted(path):
+        nonlocal call_count
+        call_count += 1
+        return real_parse_aux(path)
+
+    monkeypatch.setattr(handlers_module, "parse_aux_artifacts", _counted)
+    monkeypatch.setattr(bibliography_runtime, "parse_aux_artifacts", _counted)
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.run(tex_path.read_text(encoding="utf-8"))
+
+    assert call_count == 1

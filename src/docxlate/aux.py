@@ -27,6 +27,11 @@ def _group_text(group) -> str:
 
 
 def parse_refs(fname: str | Path):
+    refs, bibcites, _cite_order = parse_aux_artifacts(fname)
+    return refs, bibcites
+
+
+def _parse_refs_from_text(aux_text: str):
     refs: dict[str, dict[str, str | None]] = {}
     bibcites: dict[str, dict[str, str]] = {}
 
@@ -34,7 +39,7 @@ def parse_refs(fname: str | Path):
     context = tex.ownerDocument.context
     context.addGlobal('newlabel', newlabel)
     context.addGlobal('bibcite', bibcite)
-    tex.input(Path(fname).read_text(encoding='utf-8'))
+    tex.input(aux_text)
     doc = tex.parse()
 
     for node in getattr(doc, 'childNodes', []):
@@ -76,7 +81,7 @@ def parse_refs(fname: str | Path):
     return refs, bibcites
 
 
-def parse_abx_aux_cite_order(fname: str | Path) -> dict[str, int]:
+def _parse_abx_aux_cite_order_from_text(aux_text: str) -> dict[str, int]:
     """
     Parse biblatex aux cite stream and return first-seen citation order.
 
@@ -86,7 +91,7 @@ def parse_abx_aux_cite_order(fname: str | Path) -> dict[str, int]:
     cite_order: dict[str, int] = {}
     counter = 1
     pattern = re.compile(r"\\abx@aux@cite\{[^}]*\}\{([^}]+)\}")
-    for line in Path(fname).read_text(encoding="utf-8").splitlines():
+    for line in aux_text.splitlines():
         match = pattern.search(line)
         if not match:
             continue
@@ -95,4 +100,20 @@ def parse_abx_aux_cite_order(fname: str | Path) -> dict[str, int]:
             continue
         cite_order[key] = counter
         counter += 1
+    return cite_order
+
+
+def parse_aux_artifacts(fname: str | Path) -> tuple[
+    dict[str, dict[str, str | None]],
+    dict[str, dict[str, str]],
+    dict[str, int],
+]:
+    aux_text = Path(fname).read_text(encoding="utf-8")
+    refs, bibcites = _parse_refs_from_text(aux_text)
+    cite_order = _parse_abx_aux_cite_order_from_text(aux_text)
+    return refs, bibcites, cite_order
+
+
+def parse_abx_aux_cite_order(fname: str | Path) -> dict[str, int]:
+    _refs, _bibcites, cite_order = parse_aux_artifacts(fname)
     return cite_order
