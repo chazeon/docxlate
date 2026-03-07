@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from io import IOBase
 import os
 import re
-from typing import Mapping
+from typing import Callable, Mapping
 
 from docx import Document
 from docx.shared import Pt
@@ -80,6 +80,8 @@ class LatexBridge:
         self.macro_handlers: dict[str, type] = {}
         self.macro_specs: dict[str, MacroSpec] = {}
         self._directive_rules: list[tuple[re.Pattern[str], str]] = []
+        self._parse_skip_initial_policies: list[Callable] = []
+        self._parse_skip_retry_policies: list[Callable] = []
         self.context: dict = {}  # For storing state across handlers/events
         self._current_paragraph = None
         self._render_stack: list[dict] = []
@@ -304,6 +306,32 @@ class LatexBridge:
                 return
         self._directive_rules.append((pattern, normalized_macro))
 
+    def register_parse_skip_policy(self, *, initial=None, retry=None) -> None:
+        if initial is not None:
+            self._parse_skip_initial_policies.append(initial)
+        if retry is not None:
+            self._parse_skip_retry_policies.append(retry)
+
+    def _collect_parse_skip_packages(
+        self,
+        hooks: list[Callable],
+        *,
+        tex_source: str,
+        configured_skip_packages: set[str],
+        parse_error: Exception | None = None,
+    ) -> set[str]:
+        requested: set[str] = set()
+        for hook in hooks:
+            candidate = hook(tex_source, configured_skip_packages, parse_error)
+            if not candidate:
+                continue
+            for package_name in candidate:
+                normalized = str(package_name).strip()
+                if normalized:
+                    requested.add(normalized)
+        requested.difference_update(configured_skip_packages)
+        return requested
+
     def validate_macro_registry(self):
         for name, spec in self.macro_specs.items():
             validate_macro_spec(spec)
@@ -354,14 +382,14 @@ class LatexBridge:
             for p in (self.context.get("parse_skip_packages") or [])
             if str(p).strip()
         }
-        auto_skip_xcolor = (
-            "xcolor" not in configured_skip_packages
-            and self._source_uses_package(tex_source, "xcolor")
-            and self._source_uses_color_declaration(tex_source)
+        initial_skip_packages = self._collect_parse_skip_packages(
+            self._parse_skip_initial_policies,
+            tex_source=tex_source,
+            configured_skip_packages=configured_skip_packages,
         )
         parse_source = self._sanitize_source_for_parse(
             tex_source,
-            extra_skip_packages={"xcolor"} if auto_skip_xcolor else None,
+            extra_skip_packages=initial_skip_packages or None,
         )
         parsed = None
         parse_error = None
@@ -370,14 +398,16 @@ class LatexBridge:
         except Exception as exc:
             parse_error = exc
 
-        should_retry_with_xcolor_skip = (
-            parsed is None
-            and "xcolor" not in configured_skip_packages
-            and self._source_uses_package(tex_source, "xcolor")
+        retry_skip_packages = self._collect_parse_skip_packages(
+            self._parse_skip_retry_policies,
+            tex_source=tex_source,
+            configured_skip_packages=configured_skip_packages,
+            parse_error=parse_error,
         )
-        if should_retry_with_xcolor_skip:
+        retry_skip_packages.difference_update(initial_skip_packages)
+        if parsed is None and retry_skip_packages:
             retry_source = self._sanitize_source_for_parse(
-                tex_source, extra_skip_packages={"xcolor"}
+                tex_source, extra_skip_packages=retry_skip_packages
             )
             if retry_source != parse_source:
                 try:
@@ -456,22 +486,6 @@ class LatexBridge:
         if self._unknown_macro_policy() == "strict":
             raise ValueError(message)
         self._append_warning_once(message)
-
-    def _source_uses_package(self, tex_source: str, package_name: str) -> bool:
-        usepackage_re = re.compile(
-            r"\\usepackage(?:\s*\[[^\]]*\])?\s*\{(?P<pkgs>[^}]*)\}"
-        )
-        for match in usepackage_re.finditer(tex_source):
-            raw = match.group("pkgs")
-            pkgs = [pkg.strip() for pkg in raw.split(",") if pkg.strip()]
-            if package_name in pkgs:
-                return True
-        return False
-
-    def _source_uses_color_declaration(self, tex_source: str) -> bool:
-        return bool(
-            re.search(r"\\color(?:\s*\[[^\]]*\])?\s*\{", tex_source)
-        )
 
     def _sanitize_source_for_parse(
         self,
