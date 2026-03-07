@@ -28,12 +28,12 @@ As of March 6, 2026, the following decisions are locked:
 
 ## Next (Reprioritized)
 
-- [ ] Priority 1: Finish MacroSpec migration closure (blocker for clean table rollout)
+- [x] Priority 1: Finish MacroSpec migration closure (blocker for clean table rollout)
   - [x] Complete **MacroSpec Completion Checklist (Handler Audit)** below.
-  - [ ] Resolve high-impact ambiguity items needed for enforcement:
-    - [ ] `MacroSpec` policy semantics (`render`/`stub`/`declaration`)
-    - [ ] decorator strictness end-state (`parse_class` required or compatibility mode)
-    - [ ] unknown-macro warning/allowlist CI policy
+  - [x] Resolve high-impact ambiguity items needed for enforcement:
+    - [x] `MacroSpec` policy semantics (`render`/`stub`/`declaration`)
+    - [x] decorator strictness end-state (`parse_class` required or compatibility mode)
+    - [x] unknown-macro warning/allowlist CI policy
 
 - [x] Priority 2: Extract color handling into extension module
   - [x] Complete **Refactor Plan: Extract Color Handling to `extensions/xcolor.py`** below.
@@ -59,7 +59,7 @@ As of March 6, 2026, the following decisions are locked:
 
 ## MacroSpec Completion Checklist (Handler Audit)
 
-Status update (March 2026): core handlers have been migrated to explicit `MacroSpec`-backed registration. Remaining work in this area is policy documentation and strict decorator enforcement mode.
+Status update (March 2026): core handlers are explicitly `MacroSpec`-backed; strict decorator mode is now default with explicit opt-in compatibility fallback.
 
 - [x] Convert core command handlers to explicit spec-backed decorators (`parse_class=...`):
   - [x] `section`, `subsection`, `subsubsection`
@@ -78,7 +78,7 @@ Status update (March 2026): core handlers have been migrated to explicit `MacroS
   - [x] parse-only macros must appear in `macro_specs` with explicit non-render policy.
 - [ ] Decide enforcement mode for decorators:
   - [x] Keep temporary fallback (`@latex.command(...` without `parse_class`) during migration only.
-  - [ ] Add strict mode (or direct failure) after migration completion.
+  - [x] Add strict mode (or direct failure) after migration completion.
 
 Definition of done for migration:
 - Every registered command/env/parse macro is represented by a `MacroSpec`.
@@ -187,9 +187,9 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [ ] `tests/unit/test_bbl_parser.py`
   - [ ] `tests/unit/test_bcf_parser.py`
   - [ ] `tests/unit/test_aux_parser.py`
-- [ ] Ensure bibliography/references integration remains green:
-  - [ ] `tests/integration/test_citations.py`
-  - [ ] `tests/integration/test_references.py`
+- [x] Ensure bibliography/references integration remains green:
+  - [x] `tests/integration/test_citations.py`
+  - [x] `tests/integration/test_references.py`
 - [x] Add regression test for single-pass aux artifact load (no duplicate parse side-effects).
 
 ### Done Criteria
@@ -200,22 +200,22 @@ Move color-related macro classes and handler registration into a dedicated exten
 
 ## Known Ambiguities (To Clarify)
 
-- [ ] Document `MacroSpec` policy semantics with concrete examples:
-  - [ ] when to use `render`
-  - [ ] when to use `stub`
-  - [ ] when to use `declaration`
+- [x] Document `MacroSpec` policy semantics with concrete examples:
+  - [x] when to use `render`
+  - [x] when to use `stub`
+  - [x] when to use `declaration`
 - [ ] Define migration end-state for decorators:
   - [x] temporary compatibility for `@latex.command/@latex.env` without `parse_class` (transition only)
   - [x] strict enforcement plan and cutoff point (strict `MacroSpec` end-state approved)
-- [ ] Document core handler parse-class mapping plan:
-  - [ ] section/subsection/subsubsection
-  - [ ] title/author/date/maketitle
-  - [ ] paragraph/noindent/indent/Needspace
-  - [ ] equation and inline math commands
+- [x] Document core handler parse-class mapping plan:
+  - [x] section/subsection/subsubsection
+  - [x] title/author/date/maketitle
+  - [x] paragraph/noindent/indent/Needspace
+  - [x] equation and inline math commands
 - [ ] Document extension registration order dependencies and rationale.
-- [ ] Document unknown-macro warning policy and CI enforcement:
-  - [ ] strict vs allowlisted behavior
-  - [ ] where allowlist lives
+- [x] Document unknown-macro warning policy and CI enforcement:
+  - [x] strict vs allowlisted behavior
+  - [x] where allowlist lives
 - [ ] Track baseline known test failures explicitly (pre-existing vs regression).
 - [ ] Document color behavior split contract:
   - [x] declaration-style color application in core (temporary during extraction)

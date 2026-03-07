@@ -28,15 +28,27 @@ uv run pytest
 ## Architecture Guardrails (Required)
 
 - **Macro registration**: Use `MacroSpec`-backed registration for commands/environments.
-- **Transitional behavior**: decorator registration without `parse_class` is compatibility-only and must be removed as migration closes.
+- **Decorator strictness**: decorator registration without `parse_class` is disallowed by default (`LatexBridge(strict_macro_specs=True)`).
+  - Compatibility fallback exists only as an explicit opt-in (`LatexBridge(strict_macro_specs=False)`).
 - **Core boundary**: avoid adding feature-specific policy to `LatexBridge`; place feature behavior in extensions.
 - **Artifact ownership**: bibliography artifact processing (`.aux`/`.bbl`/`.bcf`) should be extension-owned and loaded once per run.
+
+### Core Parse-Class Mapping (Current)
+
+- Core handlers in `src/docxlate/handlers.py` are registered with explicit parse classes:
+  - sectioning: `section`, `subsection`, `subsubsection`, `paragraph`
+  - front matter: `title`, `author`, `date`, `maketitle`
+  - paragraph controls: `noindent`, `indent`, `Needspace`
+  - inline math: `$`, `math`
+  - block math: `equation`
 
 ## CI Expectations
 
 - Registry integrity tests must pass (no parser/renderer drift).
 - New feature work should not introduce direct `latex.macro(...)` legacy wiring for runtime macros.
 - Unknown command/environment behavior must follow documented allowlist policy; do not add silent fallback paths.
+  - Runtime policy keys: `unknown_macro_policy` (`warn` or `strict`) and `unknown_macro_allowlist` (list of macro names).
+  - In `warn` mode, keep inner content visible and emit warnings; in `strict`, fail on first unknown macro.
 - When touching migration areas, run targeted suites:
   - `tests/unit/test_registry.py`
   - `tests/integration/test_style_scope.py`

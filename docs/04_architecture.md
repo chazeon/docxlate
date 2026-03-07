@@ -149,7 +149,19 @@ The system is designed to detect:
 
 ### Registration Enforcement
 - `MacroSpec` is the required registration contract end-state.
-- Decorator fallback without `parse_class` is transitional compatibility and should be removed after migration closure.
+- Decorator fallback without `parse_class` is disabled by default.
+  - Compatibility mode is explicit opt-in only (`LatexBridge(strict_macro_specs=False)`).
+
+### `MacroSpec` Policy Semantics
+- `policy="render"`: parse + render required.
+  - Must provide both `parse_class` and `handler`.
+  - Example: `\section`, `\cite`, `itemize`.
+- `policy="stub"`: parse-only compatibility no-op.
+  - Must provide `parse_class`; must not provide `handler`.
+  - Example: parse scaffolding macros that should not emit output.
+- `policy="declaration"`: parse-only declaration that mutates style/context in the walker.
+  - Must provide `parse_class`; must not provide `handler`.
+  - Example: `\color` updates active style scope in `_declaration_style_for_node`.
 
 ## OOXML Usage Policy
 - Prefer `python-docx` for paragraph/run/style operations.

@@ -13,6 +13,10 @@ The top-level configuration keys are:
 - `parse_skip_packages`: (List of Strings) LaTeX package names to ignore during parsing.
 - `parse_skip_usepackage_paths`: (List of Strings) Specific paths in `\usepackage{...}` to skip.
 - `mathml2omml_xsl_path`: (String) Absolute path to the `mathml2omml.xsl` file for high-quality math.
+- `unknown_macro_policy`: `warn` | `strict`
+    - `warn` (default): preserve child content and emit one warning per unknown macro name.
+    - `strict`: fail conversion on the first unknown macro encountered.
+- `unknown_macro_allowlist`: (List of Strings) Macro names that are exempt from unknown-macro warnings/errors.
 - `plugins`: (Mapping) Plugin-specific configurations.
 
 ## Plugins
@@ -66,6 +70,10 @@ parse_skip_packages:
   - fontspec
   - expl3
 mathml2omml_xsl_path: /Applications/Microsoft Word.app/Contents/Resources/mathml2omml.xsl
+unknown_macro_policy: warn
+unknown_macro_allowlist:
+  - providecommand
+  - newcommand
 
 plugins:
   bibliography:
