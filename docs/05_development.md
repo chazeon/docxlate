@@ -25,6 +25,24 @@ uv run pytest
 - `tests/regression/`: Tests for previously fixed bugs.
 - `tests/fixtures/`: LaTeX, AUX, BBL, and BCF files used for testing.
 
+## Architecture Guardrails (Required)
+
+- **Macro registration**: Use `MacroSpec`-backed registration for commands/environments.
+- **Transitional behavior**: decorator registration without `parse_class` is compatibility-only and must be removed as migration closes.
+- **Core boundary**: avoid adding feature-specific policy to `LatexBridge`; place feature behavior in extensions.
+- **Artifact ownership**: bibliography artifact processing (`.aux`/`.bbl`/`.bcf`) should be extension-owned and loaded once per run.
+
+## CI Expectations
+
+- Registry integrity tests must pass (no parser/renderer drift).
+- New feature work should not introduce direct `latex.macro(...)` legacy wiring for runtime macros.
+- Unknown command/environment behavior must follow documented allowlist policy; do not add silent fallback paths.
+- When touching migration areas, run targeted suites:
+  - `tests/unit/test_registry.py`
+  - `tests/integration/test_style_scope.py`
+  - `tests/integration/test_references.py`
+  - `tests/integration/test_citations.py`
+
 ## Behavioral Specification (Golden Cases)
 
 To ensure the technical integrity of the converter, all changes must adhere to the following behavioral standards. These cases serve as the "Functional Specification" for the project.

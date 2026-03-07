@@ -6,9 +6,9 @@
 
 1.  **Parsing**: LaTeX source is parsed using `plasTeX` into an Abstract Syntax Tree (AST).
 2.  **Bridging**: The `LatexBridge` traverses the AST.
-3.  **Handling**: Registered handlers (decorators like `@latex.tag` and `@latex.env`) process specific LaTeX nodes.
+3.  **Handling**: Registered handlers (decorators like `@latex.command` and `@latex.env`) process specific LaTeX nodes through `MacroSpec` registration.
 4.  **Emitting**: Handlers call backend-agnostic methods (e.g., `emit_text`, `begin_paragraph`) that are then implemented by the DOCX backend.
-5.  **Artifact Integration**: The bridge optionally reads `.aux`, `.bbl`, and `.bcf` files to resolve cross-references and citations with high fidelity.
+5.  **Artifact Integration**: Extensions and shared parsers load `.aux`, `.bbl`, and `.bcf` artifacts to resolve cross-references and citations with high fidelity.
 
 ## Core Components
 
@@ -19,19 +19,22 @@ The `LatexBridge` is the central engine of `docxlate`. It:
 - Dispatches handlers based on the LaTeX command or environment.
 - Manages the style stack for inline formatting.
 - Collects diagnostics and warnings.
+- Enforces registry integrity checks before render execution.
+
+`LatexBridge` is intended to be a traversal/render engine, not a feature-policy host. Feature-specific logic should live in extensions.
 
 ### Handler Layer
 
 Handlers define how LaTeX structures are mapped to Word.
 
-- **Command Handlers**: Registered with `@latex.tag`, these handle inline commands like `\\textbf` or block commands like `\\section`.
+- **Command Handlers**: Registered with `@latex.command`, these handle inline commands like `\\textbf` or block commands like `\\section`.
 - **Environment Handlers**: Registered with `@latex.env`, these handle environments like `itemize`, `figure`, or `equation`.
 
 ### Artifact Parsers
 
-- **AuxParser**: Extracts labels, reference numbers, and citation keys from the LaTeX `.aux` file.
-- **BblParser**: Parses the bibliography entries from the `.bbl` file.
-- **BcfParser**: Extracts citation metadata from the `.bcf` file (used as a fallback).
+- **Core reference parsing**: Extracts label/reference metadata used by generic cross-reference flows.
+- **Bibliography artifact parsing**: Bibliography extension owns citation-order and entry parsing (`.aux`/`.bbl`/`.bcf`) for citation/bibliography rendering.
+- **Loading policy**: Prefer single-pass artifact loading per run to avoid duplicate `.aux` parse flows.
 
 ### DOCX Backend (`docx_ext`)
 
@@ -142,6 +145,11 @@ To prevent drift between the parser (plasTeX) and the renderer (LatexBridge), ma
 The system is designed to detect:
 - Macros declared as renderable without a corresponding parse signature.
 - Accidental parse-only registration for commands expected to emit output.
+- Duplicate/conflicting registrations for the same macro name.
+
+### Registration Enforcement
+- `MacroSpec` is the required registration contract end-state.
+- Decorator fallback without `parse_class` is transitional compatibility and should be removed after migration closure.
 
 ## OOXML Usage Policy
 - Prefer `python-docx` for paragraph/run/style operations.

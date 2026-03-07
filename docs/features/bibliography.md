@@ -11,6 +11,12 @@ Most LaTeX to Word converters try to parse `.bib` files and re-implement citatio
 - **`.bbl`**: Contains the already-formatted bibliography entries as LaTeX code.
 - **`.bcf`**: Provides additional citation metadata (used as a fallback).
 
+## Ownership & Loading Model
+
+- Bibliography behavior and artifact interpretation are owned by the bibliography extension runtime.
+- Core keeps generic reference-number mapping for non-bibliography references.
+- Artifact loading should run once per conversion pass (single-pass `.aux`/`.bbl`/`.bcf` handling) to avoid duplicated state setup.
+
 ## Citation Features
 
 - **Numeric Range Compression**: Automatically compresses ranges like `[1, 2, 3]` to `[1-3]`. This is configurable via `plugins.bibliography.citation_compress_ranges` and `plugins.bibliography.citation_range_min_run`.

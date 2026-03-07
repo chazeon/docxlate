@@ -37,5 +37,7 @@ docxlate convert input.tex -o output.docx
     - [Bibliography & Citations](features/bibliography.md)
     - [Figures & Layout](features/figures.md)
     - [Math Conversion](features/math.md)
+    - [Tables](features/tables.md)
 - [Architecture](04_architecture.md): Deep dive into the internal design.
 - [Development](05_development.md): How to run tests and contribute.
+- [Execution Plan](06_execution-plan.md): Priority and sequencing for macro-registration hardening and table delivery.
