@@ -66,7 +66,6 @@ class LatexBridge:
         self.strict_macro_specs = bool(strict_macro_specs)
         self.command_handlers = {}
         self.env_handlers = {}
-        self.aux_data = {}
         self.event_handlers: dict[str, list] = defaultdict(list)
         self.macro_handlers: dict[str, type] = {}
         self.macro_specs: dict[str, MacroSpec] = {}
@@ -307,7 +306,7 @@ class LatexBridge:
             for handler in self.event_handlers[event_name]:
                 handler(*args, **kwargs)
 
-    def run(self, tex_source, aux_path=None):
+    def run(self, tex_source):
         """The 'app.run()' equivalent: Process the document."""
 
         self.validate_macro_registry()

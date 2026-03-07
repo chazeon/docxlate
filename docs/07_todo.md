@@ -248,8 +248,8 @@ Move color-related macro classes and handler registration into a dedicated exten
   - legacy decorator fallback still allowed when `parse_class` omitted
   - full enforcement of “all handlers represented by MacroSpec” is not complete
 - `context` usage is heavily string-keyed (`_preserve_paragraph_once`, `_trim_next_leading_space_once`, etc.) and acts as an implicit global state channel.
-- `run(self, tex_source, aux_path=None)` has an unused parameter (`aux_path`), which suggests API drift.
-- `self.aux_data` is present in bridge state but appears unused in current flow.
+- `run(self, tex_source, aux_path=None)` API drift has been resolved by removing the unused `aux_path` parameter.
+- `self.aux_data` dead bridge state has been removed.
 
 ### Required Refactor Work
 
@@ -269,8 +269,8 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [ ] replace ad-hoc context string flags with typed state object or named state container
   - [ ] document context key ownership by subsystem
 - [ ] Remove API drift/dead fields:
-  - [ ] deprecate/remove unused `aux_path` from `run(...)` or wire it intentionally
-  - [ ] remove or document purpose of `aux_data`
+  - [x] deprecate/remove unused `aux_path` from `run(...)` or wire it intentionally
+  - [x] remove or document purpose of `aux_data`
 
 ### Validation / Regression
 
