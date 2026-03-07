@@ -60,8 +60,10 @@ def inject_omml(
         # Never let post-processing break core math rendering.
         try:
             _normalize_omml_script_bases(omml_result)
-            _apply_native_math_run_properties(omml_result, color=color, style=style)
-            _apply_native_nary_control_properties(omml_result, color=color)
+            if _needs_math_run_mutation(color=color, style=style):
+                _apply_native_math_run_properties(omml_result, color=color, style=style)
+            if color:
+                _apply_native_nary_control_properties(omml_result, color=color)
         except Exception:
             pass
         omml_node = _coerce_omml_node(omml_result)
@@ -145,35 +147,10 @@ def _apply_native_math_run_properties(
     """
     root = omml_root.getroot() if hasattr(omml_root, "getroot") else omml_root
     for m_run in root.xpath(".//m:r", namespaces=_OMML_NS):
-        m_rpr = m_run.find(f"{{{OMML_NAMESPACE}}}rPr")
-        if m_rpr is not None:
-            # Avoid invalid duplicate run-property branches: if math run already
-            # has m:rPr, place Word run properties under m:ctrlPr.
-            if not color:
-                continue
-            ctrl_pr = m_rpr.find(f"{{{OMML_NAMESPACE}}}ctrlPr")
-            if ctrl_pr is None:
-                ctrl_pr = etree.Element(f"{{{OMML_NAMESPACE}}}ctrlPr")
-                m_rpr.append(ctrl_pr)
-            w_rpr = ctrl_pr.find(_wtag("rPr"))
-            if w_rpr is None:
-                w_rpr = etree.Element(qn("w:rPr"))
-                ctrl_pr.append(w_rpr)
-        else:
-            w_rpr = m_run.find(_wtag("rPr"))
-            if w_rpr is None:
-                w_rpr = etree.Element(qn("w:rPr"))
-                m_run.insert(0, w_rpr)
-
-        r_fonts = w_rpr.find(_wtag("rFonts"))
-        if r_fonts is None:
-            r_fonts = etree.Element(qn("w:rFonts"))
-            w_rpr.append(r_fonts)
-        if r_fonts.get(qn("w:ascii")) is None:
-            r_fonts.set(qn("w:ascii"), "Cambria Math")
-        if r_fonts.get(qn("w:hAnsi")) is None:
-            r_fonts.set(qn("w:hAnsi"), "Cambria Math")
-
+        # Word-safe pattern: use direct w:rPr sibling under m:r.
+        # Avoid m:rPr/m:ctrlPr injection, which can trigger recovery on open.
+        w_rpr = _ensure_math_run_word_rpr(m_run)
+        _ensure_math_font_rpr(w_rpr)
         _apply_word_text_style_to_rpr(w_rpr, style)
         if not color:
             continue
@@ -199,16 +176,7 @@ def _apply_native_nary_control_properties(omml_root, *, color: str | None) -> No
         if w_rpr is None:
             w_rpr = etree.Element(qn("w:rPr"))
             ctrl_pr.append(w_rpr)
-        r_fonts = w_rpr.find(_wtag("rFonts"))
-        if r_fonts is None:
-            r_fonts = etree.Element(qn("w:rFonts"))
-            w_rpr.append(r_fonts)
-        if r_fonts.get(qn("w:ascii")) is None:
-            r_fonts.set(qn("w:ascii"), "Cambria Math")
-        if r_fonts.get(qn("w:hAnsi")) is None:
-            r_fonts.set(qn("w:hAnsi"), "Cambria Math")
-        if not color:
-            continue
+        _ensure_math_font_rpr(w_rpr)
         w_color = w_rpr.find(_wtag("color"))
         if w_color is None:
             w_color = etree.Element(qn("w:color"))
@@ -225,7 +193,8 @@ def _append_math_fallback_as_omml(
     style: StyleState | None,
 ) -> None:
     omml_node = _build_fallback_math_omml(text, display=display)
-    _apply_native_math_run_properties(omml_node, color=color, style=style)
+    if _needs_math_run_mutation(color=color, style=style):
+        _apply_native_math_run_properties(omml_node, color=color, style=style)
     omml_xml = etree.tostring(omml_node, encoding="utf-8")
     paragraph._element.append(parse_xml(omml_xml))
 
@@ -262,6 +231,46 @@ def _append_on_off_prop(w_rpr, prop: str, value: bool | None) -> None:
         elem.attrib.pop(qn("w:val"), None)
     else:
         elem.set(qn("w:val"), "0")
+
+
+def _needs_math_run_mutation(*, color: str | None, style: StyleState | None) -> bool:
+    if color:
+        return True
+    if style is None:
+        return False
+    return any(
+        value is not None
+        for value in (
+            style.bold,
+            style.italic,
+            style.small_caps,
+        )
+    )
+
+
+def _ensure_math_font_rpr(w_rpr) -> None:
+    r_fonts = w_rpr.find(_wtag("rFonts"))
+    if r_fonts is None:
+        r_fonts = etree.Element(qn("w:rFonts"))
+        w_rpr.append(r_fonts)
+    if r_fonts.get(qn("w:ascii")) is None:
+        r_fonts.set(qn("w:ascii"), "Cambria Math")
+    if r_fonts.get(qn("w:hAnsi")) is None:
+        r_fonts.set(qn("w:hAnsi"), "Cambria Math")
+
+
+def _ensure_math_run_word_rpr(m_run):
+    w_rpr = m_run.find(_wtag("rPr"))
+    if w_rpr is not None:
+        return w_rpr
+    w_rpr = etree.Element(qn("w:rPr"))
+    m_rpr = m_run.find(f"{{{OMML_NAMESPACE}}}rPr")
+    if m_rpr is not None:
+        idx = list(m_run).index(m_rpr) + 1
+        m_run.insert(idx, w_rpr)
+    else:
+        m_run.insert(0, w_rpr)
+    return w_rpr
 
 
 def _wtag(local: str) -> str:

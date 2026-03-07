@@ -110,7 +110,6 @@ def test_equation_nary_operator_receives_scoped_color():
         # Missing/invalid OMML XSL fallback path cannot validate n-ary OMML internals.
         return
     assert "<m:naryPr>" in para_xml
-    assert "<m:ctrlPr>" in para_xml
     assert 'w:color w:val="FF0000"' in para_xml
 
 
@@ -137,8 +136,27 @@ def test_math_runs_do_not_emit_duplicate_run_property_branches():
     root = etree.fromstring(para_xml.encode("utf-8"))
     ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
     for run in root.xpath(".//m:r", namespaces=ns):
-        child_names = [etree.QName(child).localname for child in run]
-        assert child_names.count("rPr") <= 1
+        qnames = [etree.QName(child) for child in run]
+        assert sum(1 for qn in qnames if qn.namespace == ns["m"] and qn.localname == "rPr") <= 1
+        assert (
+            sum(
+                1
+                for qn in qnames
+                if qn.namespace == "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                and qn.localname == "rPr"
+            )
+            <= 1
+        )
+
+
+def test_math_color_does_not_use_ctrlpr_under_math_run_properties():
+    latex.run(r"{\color{red}$10^{-3}\mbox{--}10^{-2}$}")
+    para_xml = latex.doc.paragraphs[0]._element.xml
+    if "<math" in latex.doc.paragraphs[0].text:
+        return
+    root = etree.fromstring(para_xml.encode("utf-8"))
+    ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+    assert root.xpath(".//m:rPr/m:ctrlPr", namespaces=ns) == []
 
 
 def test_adjacent_inline_math_fragments_are_coalesced():
