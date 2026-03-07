@@ -163,6 +163,39 @@ def test_command_decorator_can_register_through_macro_spec():
     assert spec.inline is True
 
 
+def test_command_decorator_without_parse_class_fails_in_strict_mode():
+    bridge = LatexBridge()
+    with pytest.raises(ValueError, match="requires parse_class"):
+        @bridge.command("legacy")
+        def _legacy(_node):
+            return None
+
+
+def test_env_decorator_without_parse_class_fails_in_strict_mode():
+    bridge = LatexBridge()
+    with pytest.raises(ValueError, match="requires parse_class"):
+        @bridge.env("legacyenv")
+        def _legacy(_node):
+            return None
+
+
+def test_legacy_decorator_registration_can_be_enabled_explicitly():
+    bridge = LatexBridge(strict_macro_specs=False)
+
+    @bridge.command("legacy")
+    def _legacy_cmd(_node):
+        return None
+
+    @bridge.env("legacyenv")
+    def _legacy_env(_node):
+        return None
+
+    assert "legacy" in bridge.command_handlers
+    assert "legacyenv" in bridge.env_handlers
+    assert "legacy" not in bridge.macro_specs
+    assert "legacyenv" not in bridge.macro_specs
+
+
 def test_env_decorator_can_register_through_macro_spec():
     bridge = LatexBridge()
 

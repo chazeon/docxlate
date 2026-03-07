@@ -11,6 +11,8 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
         "parse_skip_packages": ["fontspec"],
         "parse_skip_usepackage_paths": ["styles/proposal-compact"],
         "mathml2omml_xsl_path": "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL",
+        "unknown_macro_policy": "warn",
+        "unknown_macro_allowlist": ["newcommand", "providecommand"],
         "plugins": {
             "bibliography": {
                 "template": "<< fields.title >>",
@@ -49,6 +51,8 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     assert validated["parse_skip_packages"] == ["fontspec"]
     assert validated["parse_skip_usepackage_paths"] == ["styles/proposal-compact"]
     assert validated["mathml2omml_xsl_path"] == "/Applications/Microsoft Word.app/Contents/Resources/MML2OMML.XSL"
+    assert validated["unknown_macro_policy"] == "warn"
+    assert validated["unknown_macro_allowlist"] == ["newcommand", "providecommand"]
     assert validated["plugins"]["figure"]["caption"]["template"] == r"\textbf{Figure. << x >>} << caption >>"
     assert validated["plugins"]["figure"]["image"]["kind"] == "wrap"
     assert validated["plugins"]["figure"]["image"]["wrap"]["pad"]["left"] == 0.2
@@ -124,6 +128,11 @@ def test_validate_runtime_config_rejects_omit_missing_entry_policy():
 def test_validate_runtime_config_rejects_invalid_title_policy():
     with pytest.raises(ValidationError):
         validate_runtime_config({"title_render_policy": "sometimes"})
+
+
+def test_validate_runtime_config_rejects_invalid_unknown_macro_policy():
+    with pytest.raises(ValidationError):
+        validate_runtime_config({"unknown_macro_policy": "allow"})
 
 
 def test_validate_runtime_config_rejects_negative_wrap_distances():

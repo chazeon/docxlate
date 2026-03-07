@@ -15,6 +15,8 @@ class RuntimeConfig(BaseModel):
     parse_skip_packages: list[str] | None = None
     parse_skip_usepackage_paths: list[str] | None = None
     mathml2omml_xsl_path: str | None = None
+    unknown_macro_policy: Literal["warn", "strict"] | None = None
+    unknown_macro_allowlist: list[str] | None = None
     plugins: dict[str, Any] | None = None
 
 

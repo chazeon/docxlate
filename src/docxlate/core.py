@@ -61,8 +61,9 @@ class DocxlateTeX(TeX):
 
 
 class LatexBridge:
-    def __init__(self, template_path=None):
+    def __init__(self, template_path=None, *, strict_macro_specs: bool = True):
         self.doc = Document(template_path) if template_path else Document()
+        self.strict_macro_specs = bool(strict_macro_specs)
         self.command_handlers = {}
         self.env_handlers = {}
         self.aux_data = {}
@@ -166,6 +167,11 @@ class LatexBridge:
 
         def decorator(f):
             if parse_class is None and policy == "render":
+                if self.strict_macro_specs:
+                    raise ValueError(
+                        f"Decorator registration for command {name!r} requires parse_class "
+                        "under strict MacroSpec mode"
+                    )
                 self.command_handlers[name] = (f, inline)
                 return f
             self.register_spec(
@@ -187,6 +193,11 @@ class LatexBridge:
 
         def decorator(f):
             if parse_class is None and policy == "render":
+                if self.strict_macro_specs:
+                    raise ValueError(
+                        f"Decorator registration for environment {name!r} requires parse_class "
+                        "under strict MacroSpec mode"
+                    )
                 self.env_handlers[name] = f
                 return f
             self.register_spec(
@@ -381,6 +392,41 @@ class LatexBridge:
         warnings = self.context.setdefault("warnings", [])
         if message not in warnings:
             warnings.append(message)
+
+    def _unknown_macro_policy(self) -> str:
+        raw = str(self.context.get("unknown_macro_policy", "")).strip().lower()
+        if raw in {"warn", "strict"}:
+            return raw
+        mode = str(self.context.get("mode", "")).strip().lower()
+        if mode == "strict":
+            return "strict"
+        return "warn"
+
+    def _unknown_macro_allowlist(self) -> set[str]:
+        configured = self.context.get("unknown_macro_allowlist") or []
+        allowlist: set[str] = set()
+        for item in configured:
+            name = normalize_macro_name(str(item))
+            if name:
+                allowlist.add(name)
+        return allowlist
+
+    def _handle_unknown_macro(self, *, name: str, kind: str) -> None:
+        normalized = normalize_macro_name(name)
+        if not normalized:
+            return
+        if normalized in self.macro_specs:
+            return
+        if normalized.startswith("active::"):
+            return
+        if normalized in {"bgroup", "egroup"}:
+            return
+        if normalized in self._unknown_macro_allowlist():
+            return
+        message = f"Unknown LaTeX {kind}: \\{normalized}"
+        if self._unknown_macro_policy() == "strict":
+            raise ValueError(message)
+        self._append_warning_once(message)
 
     def _source_uses_package(self, tex_source: str, package_name: str) -> bool:
         usepackage_re = re.compile(
@@ -579,6 +625,12 @@ class LatexBridge:
                     self._flush_paragraph()
                 continue
 
+            if kind == "command":
+                self._handle_unknown_macro(name=name, kind="command")
+            elif kind == "environment":
+                self._handle_unknown_macro(name=name, kind="environment")
+            elif kind == "other":
+                self._handle_unknown_macro(name=name, kind="command")
             self._walk(children, active_ctx)
         return active_ctx
 
