@@ -3,6 +3,7 @@ from .hyperref import register as register_hyperref_extension
 from .figure import register as register_figures_extension
 from .lists import register as register_lists_extension
 from .table import register as register_table_extension
+from .xcolor import register as register_xcolor_extension
 
 
 def ensure_config_plugins_registered():
@@ -20,5 +21,6 @@ __all__ = [
     "register_figures_extension",
     "register_lists_extension",
     "register_table_extension",
+    "register_xcolor_extension",
     "ensure_config_plugins_registered",
 ]

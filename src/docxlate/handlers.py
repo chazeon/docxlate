@@ -1,5 +1,4 @@
 from .core import LatexBridge
-from .registry import MacroSpec
 from .utils import apply_theme_font, inject_omml
 from .aux import parse_refs
 from .extensions import (
@@ -8,6 +7,7 @@ from .extensions import (
     register_hyperref_extension,
     register_lists_extension,
     register_table_extension,
+    register_xcolor_extension,
 )
 from .model import RenderContext
 from pathlib import Path
@@ -25,6 +25,7 @@ latex = LatexBridge()
 register_hyperref_extension(latex)
 register_lists_extension(latex)
 register_table_extension(latex)
+register_xcolor_extension(latex)
 register_figures_extension(latex)
 register_bibliography_extension(latex)
 
@@ -49,16 +50,6 @@ class Needspace(Command):
     args = "len:str"
 
 
-class Color(Command):
-    macroName = "color"
-    args = "color:str"
-
-
-class Textcolor(Command):
-    macroName = "textcolor"
-    args = "color:str self"
-
-
 class Date(Command):
     macroName = "date"
     args = "self"
@@ -77,16 +68,6 @@ class Noindent(Command):
 class Indent(Command):
     macroName = "indent"
     args = ""
-
-
-latex.register_spec(
-    MacroSpec(
-        name="color",
-        kind="command",
-        parse_class=Color,
-        policy="declaration",
-    )
-)
 
 
 def _math_node_text(node):
@@ -340,19 +321,6 @@ def handle_indent(_node):
 def handle_needspace(_node):
     # Layout hint for TeX pagination; no-op for DOCX output.
     return
-
-
-@latex.command("textcolor", inline=True, parse_class=Textcolor)
-def handle_textcolor(node):
-    color = latex.get_arg_text(node, 0, key="color")
-    text_fragment = getattr(node, "attributes", {}).get("self")
-    style = {"color": color} if color else None
-    if text_fragment is not None and getattr(text_fragment, "childNodes", None):
-        latex.render_nodes(text_fragment.childNodes, style=style)
-        return
-    text = latex.get_arg_text(node, 1, key="self")
-    if text:
-        latex.append_inline(text, style=style)
 
 
 @latex.command("paragraph", inline=True, parse_class=plastex_paragraph)
