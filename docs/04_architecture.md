@@ -114,7 +114,7 @@ Core traversal uses typed context objects rather than plain dict threading:
 - Track color as part of inline `StyleState` and resolve it during walk-time scope composition.
 - Apply resolved color directly to text runs (`w:rPr/w:color`) in backend emission.
 - For math, color must be propagated through math emission (OMML math run properties), not only text run properties.
-- **Compatibility guard**: avoid direct OMML run-property rewrites that trigger Word document recovery; keep math-color as a deferred compatibility task until validated with Word.
+- **Compatibility guard**: use Word-safe OMML run-property emission for colored math (`w:rPr` under `m:r`), and avoid `m:rPr/m:ctrlPr` injection patterns that can trigger Word document recovery.
 
 ## Numbering & Reference Policy
 
