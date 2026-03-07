@@ -217,3 +217,27 @@ def test_global_registry_has_no_legacy_handler_or_macro_wiring_drift():
     assert set(latex.env_handlers) - specs == set()
     assert set(latex.macro_handlers) - specs == set()
     assert latex.macro_specs["color"].policy == "declaration"
+
+
+def test_comment_directive_registration_is_deduplicated_and_normalized():
+    bridge = LatexBridge()
+    bridge.register_comment_directive(
+        path_pattern=r"figure\.wrap\.(?:shift\.[xy]|gap)",
+        macro_name=r"\DocxlateFigWrapSet",
+    )
+    bridge.register_comment_directive(
+        path_pattern=r"figure\.wrap\.(?:shift\.[xy]|gap)",
+        macro_name=r"\DocxlateFigWrapSet",
+    )
+
+    assert len(bridge._directive_rules) == 1
+    pattern, macro_name = bridge._directive_rules[0]
+    assert pattern.fullmatch("FIGURE.WRAP.GAP")
+    assert macro_name == "DocxlateFigWrapSet"
+
+
+def test_global_registry_wires_figure_wrap_comment_directive():
+    assert any(
+        macro_name == "docxlatefigwrapset" and pattern.fullmatch("figure.wrap.shift.y")
+        for pattern, macro_name in latex._directive_rules
+    )

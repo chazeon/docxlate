@@ -240,7 +240,7 @@ Move color-related macro classes and handler registration into a dedicated exten
   - paragraph/layout state machine
   - plugin-specific helper surfaces (figure/wrap emit passthrough)
 - Core contains feature-specific logic that should live in feature modules:
-  - `DocxlateDirectiveTokenizer` hardcodes `figure.wrap.*` directives
+  - `DocxlateDirectiveTokenizer` now uses extension-registered directive rules (figure wrap pattern moved out of core).
   - `_parse_source` hardcodes `xcolor` package-skip retry behavior
   - figure/wrap emitter passthrough methods expose figure-specific backend concepts
 - Registration remains in mixed mode:
@@ -259,7 +259,7 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [ ] paragraph/render state management (frame + whitespace + paragraph flush rules)
   - [ ] registration/registry API surface
 - [ ] Move feature-specific policy out of core:
-  - [ ] move figure directive tokenization pattern out of core tokenizer (or make extensible hook registry)
+  - [x] move figure directive tokenization pattern out of core tokenizer (or make extensible hook registry)
   - [ ] move xcolor parse-skip heuristics to extension/config compatibility layer
   - [ ] reduce figure-specific wrapper methods on `LatexBridge` to a smaller backend capability boundary
 - [ ] Complete registration enforcement:

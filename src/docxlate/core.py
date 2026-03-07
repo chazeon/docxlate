@@ -21,14 +21,13 @@ from .registry import MacroSpec, normalize_macro_name, validate_macro_spec
 
 class DocxlateDirectiveTokenizer(Tokenizer):
     _directive_re = re.compile(
-        r"^\s*docxlate:\s*"
-        r"(figure\.wrap\.(?:shift\.[xy]|gap|pad\.(?:left|right|top|bottom)|inset\.(?:left|right|top|bottom)))"
-        r"\s*=\s*([-+]?\d*\.?\d+)\s*$",
+        r"^\s*docxlate:\s*(?P<path>[A-Za-z0-9_.-]+)\s*=\s*(?P<value>[-+]?\d*\.?\d+)\s*$",
         flags=re.I,
     )
 
-    def __init__(self, source, context):
+    def __init__(self, source, context, *, directive_rules=None):
         super().__init__(source, context)
+        self._directive_rules = list(directive_rules or [])
         self._source_readline = self.readline
         self.readline = self._readline_with_directives
 
@@ -38,14 +37,21 @@ class DocxlateDirectiveTokenizer(Tokenizer):
             return line
         match = self._directive_re.match(line.strip())
         if match is not None:
-            key = match.group(1).lower()
-            value = match.group(2)
-            injected = rf"\docxlatefigwrapset{{{key}}}{{{value}}}"
-            self._charBuffer[:0] = list(injected)
+            path = match.group("path").lower()
+            value = match.group("value")
+            for path_re, macro_name in self._directive_rules:
+                if path_re.fullmatch(path):
+                    injected = rf"\{macro_name}{{{path}}}{{{value}}}"
+                    self._charBuffer[:0] = list(injected)
+                    break
         return line
 
 
 class DocxlateTeX(TeX):
+    def __init__(self, *args, directive_rules=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._directive_rules = list(directive_rules or [])
+
     def input(self, source):
         if source is None:
             return
@@ -54,7 +60,11 @@ class DocxlateTeX(TeX):
                 self.jobname = ""
             elif isinstance(source, IOBase):
                 self.jobname = os.path.basename(os.path.splitext(source.name)[0])
-        tokenizer = DocxlateDirectiveTokenizer(source, self.ownerDocument.context)
+        tokenizer = DocxlateDirectiveTokenizer(
+            source,
+            self.ownerDocument.context,
+            directive_rules=self._directive_rules,
+        )
         self.inputs.append((tokenizer, iter(tokenizer)))
         self.currentInput = self.inputs[-1]
         return self
@@ -69,6 +79,7 @@ class LatexBridge:
         self.event_handlers: dict[str, list] = defaultdict(list)
         self.macro_handlers: dict[str, type] = {}
         self.macro_specs: dict[str, MacroSpec] = {}
+        self._directive_rules: list[tuple[re.Pattern[str], str]] = []
         self.context: dict = {}  # For storing state across handlers/events
         self._current_paragraph = None
         self._render_stack: list[dict] = []
@@ -274,6 +285,25 @@ class LatexBridge:
         for spec in specs:
             self.register_spec(spec)
 
+    def register_comment_directive(self, *, path_pattern: str, macro_name: str) -> None:
+        normalized_macro = normalize_macro_name(macro_name)
+        if not normalized_macro:
+            raise ValueError("Directive registration requires a non-empty macro_name")
+        try:
+            pattern = re.compile(path_pattern, flags=re.I)
+        except re.error as exc:
+            raise ValueError(f"Invalid directive path_pattern {path_pattern!r}") from exc
+        signature = (pattern.pattern, pattern.flags, normalized_macro)
+        for existing_pattern, existing_macro in self._directive_rules:
+            existing_signature = (
+                existing_pattern.pattern,
+                existing_pattern.flags,
+                existing_macro,
+            )
+            if signature == existing_signature:
+                return
+        self._directive_rules.append((pattern, normalized_macro))
+
     def validate_macro_registry(self):
         for name, spec in self.macro_specs.items():
             validate_macro_spec(spec)
@@ -378,7 +408,7 @@ class LatexBridge:
         return parsed
 
     def _parse_with_registered_macros(self, tex_source):
-        tex = DocxlateTeX()
+        tex = DocxlateTeX(directive_rules=self._directive_rules)
         for macro_name, macro_class in self.macro_handlers.items():
             tex.ownerDocument.context.addGlobal(macro_name, macro_class)
         tex.input(tex_source)
@@ -656,7 +686,7 @@ class LatexBridge:
             macroName = "docxlatefragment"
             args = "self"
 
-        tex = DocxlateTeX()
+        tex = DocxlateTeX(directive_rules=self._directive_rules)
         macro_context = self.context.get("_parse_macro_context")
         if isinstance(macro_context, dict):
             tex.ownerDocument.context.importMacros(macro_context)
