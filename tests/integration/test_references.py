@@ -246,16 +246,22 @@ def test_aux_artifacts_are_loaded_once_per_run(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    real_parse_aux = handlers_module.parse_aux_artifacts
+    real_parse_aux = bibliography_runtime.parse_aux_artifacts
+    real_parse_refs = handlers_module.parse_refs
     call_count = 0
 
-    def _counted(path):
+    def _counted_aux(path):
         nonlocal call_count
         call_count += 1
         return real_parse_aux(path)
 
-    monkeypatch.setattr(handlers_module, "parse_aux_artifacts", _counted)
-    monkeypatch.setattr(bibliography_runtime, "parse_aux_artifacts", _counted)
+    def _counted_refs(path):
+        nonlocal call_count
+        call_count += 1
+        return real_parse_refs(path)
+
+    monkeypatch.setattr(handlers_module, "parse_refs", _counted_refs)
+    monkeypatch.setattr(bibliography_runtime, "parse_aux_artifacts", _counted_aux)
 
     latex.context["tex_path"] = str(tex_path)
     latex.run(tex_path.read_text(encoding="utf-8"))

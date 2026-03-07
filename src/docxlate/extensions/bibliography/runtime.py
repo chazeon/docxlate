@@ -5,9 +5,9 @@ from pathlib import Path
 from docx.shared import Inches, RGBColor
 from plasTeX import Command
 
-from docxlate.aux import parse_aux_artifacts
-from docxlate.bbl import format_bibliography_entry, parse_bbl
-from docxlate.bcf import parse_bcf
+from .artifacts.aux import parse_aux_artifacts
+from .artifacts.bbl import format_bibliography_entry, parse_bbl
+from .artifacts.bcf import parse_bcf
 
 
 class DocxlateBibEntry(Command):
@@ -206,7 +206,6 @@ def register(latex, *, plugin):
         tex_path = latex.context.get("tex_path")
         if not tex_path:
             return
-        latex.context["bibcites"] = {}
         latex.context["cite_order"] = {}
         latex.context["bbl_entries"] = {}
         latex.context["bib_entry_labels"] = {}
@@ -216,10 +215,9 @@ def register(latex, *, plugin):
             cache_key = str(aux_path.resolve())
             cached = aux_cache.get(cache_key)
             if cached is None:
-                refs, bibcites, cite_order = parse_aux_artifacts(aux_path)
-                cached = {"refs": refs, "bibcites": bibcites, "cite_order": cite_order}
+                refs, _bibcites, cite_order = parse_aux_artifacts(aux_path)
+                cached = {"refs": refs, "cite_order": cite_order}
                 aux_cache[cache_key] = cached
-            latex.context["bibcites"] = dict(cached.get("bibcites", {}))
             latex.context["cite_order"] = dict(cached.get("cite_order", {}))
         bcf_path = Path(tex_path).with_suffix(".bcf")
         if bcf_path.exists() and not latex.context.get("cite_order"):

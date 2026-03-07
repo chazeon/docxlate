@@ -9,8 +9,8 @@ from io import BytesIO
 import click
 import yaml
 from pydantic import ValidationError
-from .bcf import declared_fields_from_bcf, parse_bcf
 from .config import format_runtime_config_error, validate_runtime_config
+from .extensions.bibliography.artifacts.bcf import declared_fields_from_bcf, parse_bcf
 from .handlers import latex
 
 
