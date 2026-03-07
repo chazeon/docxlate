@@ -141,6 +141,20 @@ def test_math_runs_do_not_emit_duplicate_run_property_branches():
         assert child_names.count("rPr") <= 1
 
 
+def test_adjacent_inline_math_fragments_are_coalesced():
+    latex.run(r"Mesh uses $2\times2\times2$$k$ points.")
+    para = latex.doc.paragraphs[0]
+    if "<math" in para.text:
+        # Fallback mode: OMML XSL not available; skip structural OMML assertion.
+        return
+    root = etree.fromstring(para._element.xml.encode("utf-8"))
+    ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+    inline_math = root.xpath(".//m:oMath", namespaces=ns)
+    assert len(inline_math) == 1
+    math_text = "".join(inline_math[0].xpath(".//m:t/text()", namespaces=ns))
+    assert "2" in math_text and "k" in math_text
+
+
 def test_section_body_text_is_rendered_with_plastex():
     latex.run(r"\section{Introduction} Hello world.")
 
