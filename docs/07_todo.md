@@ -39,8 +39,8 @@ As of March 6, 2026, the following decisions are locked:
   - [x] Complete **Refactor Plan: Extract Color Handling to `extensions/xcolor.py`** below.
   - [x] Keep runtime behavior unchanged while moving ownership out of core handlers.
 
-- [ ] Priority 3: Consolidate bibliography artifact ownership (`.aux`/`.bbl`/`.bcf`)
-  - [ ] Complete **Audit Plan: Bibliography Artifact Ownership** below.
+- [x] Priority 3: Consolidate bibliography artifact ownership (`.aux`/`.bbl`/`.bcf`)
+  - [x] Complete **Audit Plan: Bibliography Artifact Ownership** below.
   - [x] Remove duplicated `.aux` parsing passes and clarify module boundaries.
 
 - [ ] Priority 4: Table MVP (after Priority 1 + 2 + 3)
@@ -158,35 +158,35 @@ Move color-related macro classes and handler registration into a dedicated exten
 
 ### Target Ownership Model
 
-- [ ] Bibliography extension should own bibliography artifact parsing pipeline end-to-end.
-- [ ] Core should own only generic cross-reference label parsing needed outside bibliography.
-- [ ] Root-level parser modules should either:
-  - [ ] become thin compatibility wrappers, or
-  - [ ] be clearly documented as shared artifact utilities.
+- [x] Bibliography extension should own bibliography artifact parsing pipeline end-to-end.
+- [x] Core should own only generic cross-reference label parsing needed outside bibliography.
+- [x] Root-level parser modules should either:
+  - [x] become thin compatibility wrappers, or
+  - [x] be clearly documented as shared artifact utilities.
 
 ### Required Refactor Work
 
-- [ ] Split aux concerns:
-  - [ ] keep `newlabel`/refs parsing in core/shared module
-  - [ ] move biblatex cite-order parsing (`abx@aux@cite`) into bibliography extension artifact module
-- [ ] Move/organize bibliography artifact parsers under extension (example target):
-  - [ ] `extensions/bibliography/artifacts/bbl.py`
-  - [ ] `extensions/bibliography/artifacts/bcf.py`
-  - [ ] `extensions/bibliography/artifacts/aux.py`
+- [x] Split aux concerns:
+  - [x] keep `newlabel`/refs parsing in core/shared module
+  - [x] move biblatex cite-order parsing (`abx@aux@cite`) into bibliography extension artifact module
+- [x] Move/organize bibliography artifact parsers under extension (example target):
+  - [x] `extensions/bibliography/artifacts/bbl.py`
+  - [x] `extensions/bibliography/artifacts/bcf.py`
+  - [x] `extensions/bibliography/artifacts/aux.py`
 - [x] Replace double `.aux` file parse with one cached read per run (shared parse result in context).
-- [ ] Decide fate of `bibcites`:
-  - [ ] remove if unused
+- [x] Decide fate of `bibcites`:
+  - [x] remove if unused
   - [ ] or document concrete runtime usage
-- [ ] Preserve public import/API compatibility as needed:
-  - [ ] keep `docxlate.bbl` / `docxlate.bcf` wrappers until deprecation window ends
-  - [ ] keep CLI `check-bcf` behavior unchanged
+- [x] Preserve public import/API compatibility as needed:
+  - [x] keep `docxlate.bbl` / `docxlate.bcf` wrappers until deprecation window ends
+  - [x] keep CLI `check-bcf` behavior unchanged
 
 ### Tests & Validation
 
-- [ ] Ensure existing parser unit tests remain green:
-  - [ ] `tests/unit/test_bbl_parser.py`
-  - [ ] `tests/unit/test_bcf_parser.py`
-  - [ ] `tests/unit/test_aux_parser.py`
+- [x] Ensure existing parser unit tests remain green:
+  - [x] `tests/unit/test_bbl_parser.py`
+  - [x] `tests/unit/test_bcf_parser.py`
+  - [x] `tests/unit/test_aux_parser.py`
 - [x] Ensure bibliography/references integration remains green:
   - [x] `tests/integration/test_citations.py`
   - [x] `tests/integration/test_references.py`
@@ -194,9 +194,9 @@ Move color-related macro classes and handler registration into a dedicated exten
 
 ### Done Criteria
 
-- [ ] Bibliography artifact code is extension-owned and no longer scattered across unrelated core modules.
+- [x] Bibliography artifact code is extension-owned and no longer scattered across unrelated core modules.
 - [x] `.aux` parsing is not duplicated per run.
-- [ ] CLI/API compatibility is maintained (or explicitly versioned/deprecated).
+- [x] CLI/API compatibility is maintained (or explicitly versioned/deprecated).
 
 ## Known Ambiguities (To Clarify)
 
