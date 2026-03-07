@@ -149,14 +149,20 @@ def test_math_runs_do_not_emit_duplicate_run_property_branches():
         )
 
 
-def test_math_color_does_not_use_ctrlpr_under_math_run_properties():
+def test_regression_word_recovery_math_color_uses_safe_run_properties():
     latex.run(r"{\color{red}$10^{-3}\mbox{--}10^{-2}$}")
     para_xml = latex.doc.paragraphs[0]._element.xml
     if "<math" in latex.doc.paragraphs[0].text:
         return
     root = etree.fromstring(para_xml.encode("utf-8"))
-    ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+    ns = {
+        "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+        "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+    }
+    # Recovery regression guard: disallow the unsafe branch pattern.
     assert root.xpath(".//m:rPr/m:ctrlPr", namespaces=ns) == []
+    # Keep the intended behavior: math remains colored red.
+    assert root.xpath(".//m:r/w:rPr/w:color[@w:val='FF0000']", namespaces=ns)
 
 
 def test_section_body_text_is_rendered_with_plastex():
