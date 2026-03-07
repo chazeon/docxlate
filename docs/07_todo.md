@@ -50,9 +50,9 @@ As of March 6, 2026, the following decisions are locked:
   - [x] `table` caption/label with `.aux` number resolution.
 
 - [ ] Priority 5: Table Structural Expansion
-  - [ ] `multicolumn` horizontal merging.
+  - [x] `multicolumn` horizontal merging.
   - [ ] Sizing/alignment refinements.
-  - [ ] XML-level regression tests.
+  - [x] XML-level regression tests.
 
 - [ ] Priority 6: Core (`core.py`) cleanup and boundary tightening
   - [ ] Complete **Core Audit: `LatexBridge` abstraction and cleanup** below.

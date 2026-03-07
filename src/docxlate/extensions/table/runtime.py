@@ -128,6 +128,37 @@ def _render_caption(latex, caption_node, *, label_names: list[str], anchor_parag
 
 
 def register(latex, *, plugin):
+    def _coerce_multicolumn(cell_nodes: list) -> tuple[list, int, str | None]:
+        meaningful = []
+        for node in cell_nodes:
+            if isinstance(node, str):
+                if node.strip():
+                    meaningful.append(node)
+                continue
+            if _node_name(node) == "#text" and not str(node).strip():
+                continue
+            meaningful.append(node)
+
+        if len(meaningful) != 1:
+            return cell_nodes, 1, None
+
+        node = meaningful[0]
+        if _node_name(node) != "multicolumn":
+            return cell_nodes, 1, None
+
+        span_text = latex.get_arg_text(node, 0, key="cols")
+        align = latex.get_arg_text(node, 1, key="align")
+        try:
+            span = int(span_text)
+        except (TypeError, ValueError):
+            span = 1
+        if span < 1:
+            span = 1
+        fragment = getattr(node, "attributes", {}).get("self")
+        if fragment is not None and getattr(fragment, "childNodes", None):
+            return list(fragment.childNodes), span, align
+        return list(getattr(node, "childNodes", []) or []), span, align
+
     def _render_tabular(node):
         rows = _split_tabular_rows(list(getattr(node, "childNodes", []) or []))
         if not rows:
@@ -135,12 +166,24 @@ def register(latex, *, plugin):
 
         colspec = latex.get_arg_text(node, 0, key="colspec")
         align_tokens = _alignment_tokens_from_colspec(colspec)
-        col_count = max(len(row) for row in rows)
+        row_models: list[list[tuple[list, int, str | None]]] = []
+        max_cols = 0
+        for row in rows:
+            row_model = []
+            row_total = 0
+            for cell_nodes in row:
+                content_nodes, span, align = _coerce_multicolumn(cell_nodes)
+                row_model.append((content_nodes, span, align))
+                row_total += span
+            row_models.append(row_model)
+            max_cols = max(max_cols, row_total)
+
+        col_count = max(max_cols, len(align_tokens))
         if col_count <= 0:
             return None
 
         latex._flush_paragraph()
-        doc_table = latex.doc.add_table(rows=len(rows), cols=col_count)
+        doc_table = latex.doc.add_table(rows=len(row_models), cols=col_count)
         selected_style = _resolve_table_style(
             latex.doc,
             candidates=plugin.style_candidates(latex),
@@ -156,16 +199,32 @@ def register(latex, *, plugin):
         doc_table.autofit = plugin.autofit(latex)
 
         anchor_paragraph = None
-        for row_idx, row_cells in enumerate(rows):
-            for col_idx in range(col_count):
-                cell = doc_table.cell(row_idx, col_idx)
+        for row_idx, row_cells in enumerate(row_models):
+            col_idx = 0
+            for content_nodes, span, cell_align in row_cells:
+                if col_idx >= col_count:
+                    break
+                start_cell = doc_table.cell(row_idx, col_idx)
+                end_col = min(col_count - 1, col_idx + span - 1)
+                cell = (
+                    start_cell.merge(doc_table.cell(row_idx, end_col))
+                    if end_col > col_idx
+                    else start_cell
+                )
                 paragraph = cell.paragraphs[0]
                 anchor_paragraph = paragraph
-                if col_idx < len(align_tokens):
+                if cell_align:
+                    align_token = next(
+                        (ch for ch in cell_align.lower() if ch in {"c", "l", "r"}),
+                        None,
+                    )
+                    if align_token is not None:
+                        paragraph.alignment = _alignment_for_token(align_token)
+                elif col_idx < len(align_tokens):
                     paragraph.alignment = _alignment_for_token(align_tokens[col_idx])
-                content = row_cells[col_idx] if col_idx < len(row_cells) else []
                 with latex.render_frame(paragraph=paragraph):
-                    latex.render_nodes(content)
+                    latex.render_nodes(content_nodes)
+                col_idx += max(1, span)
         latex._flush_paragraph()
         return anchor_paragraph
 

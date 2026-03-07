@@ -88,3 +88,13 @@ def test_tabular_keeps_math_and_image_inside_cells(tmp_path):
     right_xml = table.cell(0, 1)._tc.xml
     assert "<m:oMath" in left_xml or "<math" in table.cell(0, 0).text
     assert "<a:blip" in right_xml
+
+
+def test_tabular_multicolumn_merges_cells_horizontally():
+    tex = r"\begin{tabular}{c c c}A & \multicolumn{2}{c}{BC}\\D & E & F\end{tabular}"
+    latex.run(tex)
+
+    table = latex.doc.tables[0]
+    xml = table._tbl.xml
+    assert 'w:gridSpan w:val="2"' in xml
+    assert "BC" in "\n".join(cell.text for row in table.rows for cell in row.cells)
