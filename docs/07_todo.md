@@ -56,14 +56,14 @@ As of March 6, 2026, the following decisions are locked:
   - [x] Sizing/alignment refinements.
   - [x] XML-level regression tests.
 
-- [ ] Priority 6: Audit closure - failing baseline tests
-  - [ ] Replace local-file-dependent aux assertion with fixture-driven test data.
-    - [ ] move `tests/test_aux.py` to a stable fixture under `tests/fixtures/`.
-    - [ ] assert expected labels from fixture artifact, not mutable project-local `main.aux`.
-  - [ ] Align citation inline test with current bibliography post-process contract.
-    - [ ] update/split `tests/test_inline.py::test_cite_produces_inline_reference`.
-    - [ ] assert expected references append behavior when `cite_order` is present.
-  - [ ] Validation gate: `uv run pytest -q` with no unexpected failures.
+- [x] Priority 6: Audit closure - failing baseline tests
+  - [x] Replace local-file-dependent aux assertion with fixture-driven test data.
+    - [x] move `tests/test_aux.py` to a stable fixture under `tests/fixtures/`.
+    - [x] assert expected labels from fixture artifact, not mutable project-local `main.aux`.
+  - [x] Align citation inline test with current bibliography post-process contract.
+    - [x] update/split `tests/test_inline.py::test_cite_produces_inline_reference`.
+    - [x] assert expected references append behavior when `cite_order` is present.
+  - [x] Validation gate: `uv run pytest -q` with no unexpected failures.
 
 - [ ] Priority 7: MacroSpec end-state closure for figure macros
   - [ ] Replace direct `latex.macro(...)` figure parse registration with explicit MacroSpec wiring.

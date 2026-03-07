@@ -65,9 +65,9 @@ def test_cite_produces_inline_reference():
     _reset_router()
     latex.context['cite_order'] = {"Foo2025": 7}
     latex.run(r"Refer to \cite{Foo2025} here.")
-    assert len(latex.doc.paragraphs) == 1
-    para = latex.doc.paragraphs[0]
-    assert "[7]" in para.text
+    assert latex.doc.paragraphs[0].text == "Refer to [7] here."
+    assert any(p.text == "References" for p in latex.doc.paragraphs)
+    assert any("Foo2025" in p.text for p in latex.doc.paragraphs)
 
 
 def test_inline_math_uses_omml_runs():
