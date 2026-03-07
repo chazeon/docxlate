@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from urllib.parse import urlparse
 
@@ -37,10 +38,41 @@ class ReferenceResolver:
         self.context.setdefault("labels", {})
         self.context.setdefault("warnings", [])
         self.context.setdefault("_bookmark_id", 1)
+        self.context.setdefault("_anchor_names", {})
+        self.context.setdefault("_anchor_names_used", set())
 
     def _anchor_name(self, label_name: str) -> str:
-        clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", label_name).strip("_")
-        return f"ref_{clean or 'target'}"
+        self._ensure_state()
+        anchor_map: dict[str, str] = self.context["_anchor_names"]
+        used: set[str] = self.context["_anchor_names_used"]
+        if label_name in anchor_map:
+            return anchor_map[label_name]
+
+        clean = re.sub(r"[^A-Za-z0-9_]+", "_", str(label_name)).strip("_")
+        base = f"ref_{clean or 'target'}"
+        candidate = base[:40]
+
+        # Word bookmark names are more restrictive than generic OOXML string fields.
+        # Keep names short and collision-safe to avoid recovery prompts.
+        if len(base) > 40 or candidate in used:
+            digest = hashlib.sha1(str(label_name).encode("utf-8")).hexdigest()[:8]
+            prefix = (clean or "target")[:27]
+            candidate = f"ref_{prefix}_{digest}" if prefix else f"ref_{digest}"
+
+        if candidate in used:
+            suffix = 2
+            while True:
+                suffix_str = f"_{suffix}"
+                stem = candidate[: max(0, 40 - len(suffix_str))]
+                trial = f"{stem}{suffix_str}"
+                if trial not in used:
+                    candidate = trial
+                    break
+                suffix += 1
+
+        anchor_map[label_name] = candidate
+        used.add(candidate)
+        return candidate
 
     def anchor_name(self, label_name: str) -> str:
         return self._anchor_name(label_name)
