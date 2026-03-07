@@ -1,4 +1,5 @@
 from .core import LatexBridge
+from .registry import MacroSpec
 from .utils import apply_theme_font, inject_omml
 from .aux import parse_refs
 from .extensions import (
@@ -13,6 +14,12 @@ from pathlib import Path
 from docx.shared import Pt
 import re
 from plasTeX import Command
+from plasTeX.Base.LaTeX.Math import equation as plastex_equation
+from plasTeX.Base.LaTeX.Math import math as plastex_math
+from plasTeX.Base.LaTeX.Sectioning import paragraph as plastex_paragraph
+from plasTeX.Base.LaTeX.Sectioning import section as plastex_section
+from plasTeX.Base.LaTeX.Sectioning import subsection as plastex_subsection
+from plasTeX.Base.LaTeX.Sectioning import subsubsection as plastex_subsubsection
 
 latex = LatexBridge()
 register_hyperref_extension(latex)
@@ -27,6 +34,21 @@ class And(Command):
     args = ""
 
 
+class Title(Command):
+    macroName = "title"
+    args = "self"
+
+
+class Author(Command):
+    macroName = "author"
+    args = "self"
+
+
+class Needspace(Command):
+    macroName = "Needspace"
+    args = "len:str"
+
+
 class Color(Command):
     macroName = "color"
     args = "color:str"
@@ -37,15 +59,34 @@ class Textcolor(Command):
     args = "color:str self"
 
 
-class Needspace(Command):
-    macroName = "Needspace"
-    args = "len:str"
+class Date(Command):
+    macroName = "date"
+    args = "self"
 
 
-latex.macro("and", And)
-latex.macro("color", Color)
-latex.macro("textcolor", Textcolor)
-latex.macro("Needspace", Needspace)
+class Maketitle(Command):
+    macroName = "maketitle"
+    args = ""
+
+
+class Noindent(Command):
+    macroName = "noindent"
+    args = ""
+
+
+class Indent(Command):
+    macroName = "indent"
+    args = ""
+
+
+latex.register_spec(
+    MacroSpec(
+        name="color",
+        kind="command",
+        parse_class=Color,
+        policy="declaration",
+    )
+)
 
 
 def _math_node_text(node):
@@ -237,37 +278,37 @@ def _handle_section(node):
     latex.mark_next_body_paragraph_first()
 
 
-@latex.command("section")
+@latex.command("section", parse_class=plastex_section)
 def handle_section(node):
     _handle_section(node)
 
 
-@latex.command("subsection")
+@latex.command("subsection", parse_class=plastex_subsection)
 def handle_subsection(node):
     _handle_section(node)
 
 
-@latex.command("subsubsection")
+@latex.command("subsubsection", parse_class=plastex_subsubsection)
 def handle_subsubsection(node):
     _handle_section(node)
 
 
-@latex.command("title", inline=True)
+@latex.command("title", inline=True, parse_class=Title)
 def handle_title(node):
     _store_front_matter_tex(node, "title")
 
 
-@latex.command("author", inline=True)
+@latex.command("author", inline=True, parse_class=Author)
 def handle_author(node):
     _store_front_matter_tex(node, "author")
 
 
-@latex.command("date", inline=True)
+@latex.command("date", inline=True, parse_class=Date)
 def handle_date(node):
     _store_front_matter_tex(node, "date")
 
 
-@latex.command("and", inline=True)
+@latex.command("and", inline=True, parse_class=And)
 def handle_and(_node):
     if latex.context.get("_in_maketitle_author"):
         paragraph = latex._active_paragraph()
@@ -279,29 +320,29 @@ def handle_and(_node):
         latex.append_inline(" and ")
 
 
-@latex.command("maketitle")
+@latex.command("maketitle", parse_class=Maketitle)
 def handle_maketitle(_node):
     latex.context["_frontmatter_maketitle_seen"] = True
     _emit_front_matter(prepend=False)
 
 
-@latex.command("noindent", inline=True)
+@latex.command("noindent", inline=True, parse_class=Noindent)
 def handle_noindent(_node):
     latex.request_noindent()
 
 
-@latex.command("indent", inline=True)
+@latex.command("indent", inline=True, parse_class=Indent)
 def handle_indent(_node):
     latex.request_indent()
 
 
-@latex.command("Needspace", inline=True)
+@latex.command("Needspace", inline=True, parse_class=Needspace)
 def handle_needspace(_node):
     # Layout hint for TeX pagination; no-op for DOCX output.
     return
 
 
-@latex.command("textcolor", inline=True)
+@latex.command("textcolor", inline=True, parse_class=Textcolor)
 def handle_textcolor(node):
     color = latex.get_arg_text(node, 0, key="color")
     text_fragment = getattr(node, "attributes", {}).get("self")
@@ -314,7 +355,7 @@ def handle_textcolor(node):
         latex.append_inline(text, style=style)
 
 
-@latex.command("paragraph", inline=True)
+@latex.command("paragraph", inline=True, parse_class=plastex_paragraph)
 def handle_paragraph(node):
     """Render LaTeX \\paragraph as a run-in heading."""
     current = latex._active_paragraph()
@@ -346,7 +387,7 @@ def handle_paragraph(node):
         latex.render_nodes(node.childNodes, style={"bold": False, "italic": False})
 
 
-@latex.env("equation")
+@latex.env("equation", parse_class=plastex_equation)
 def handle_math(node):
     source = latex.get_math_source(node)
     resolver = getattr(latex, "reference_resolver", None)
@@ -423,11 +464,11 @@ def render_implicit_front_matter():
     _emit_front_matter(prepend=True)
 
 
-@latex.command("$", inline=True)
+@latex.command("$", inline=True, parse_class=plastex_math)
 def handle_inline_dollar_math(node):
     latex.append_math(_math_node_text(node))
 
 
-@latex.command("math", inline=True)
+@latex.command("math", inline=True, parse_class=plastex_math)
 def handle_inline_paren_math(node):
     latex.append_math(_math_node_text(node))

@@ -4,6 +4,7 @@ import pytest
 from plasTeX import Command, Environment
 
 from docxlate.core import LatexBridge
+from docxlate.handlers import latex
 from docxlate.extensions.table.runtime import table_specs
 from docxlate.registry import MacroSpec
 
@@ -55,6 +56,20 @@ def test_parse_only_spec_must_use_explicit_stub_policy():
                 parse_class=DemoCommand,
             )
         )
+
+
+def test_command_spec_can_use_environment_parse_class_for_math_like_nodes():
+    bridge = LatexBridge()
+    bridge.register_spec(
+        MacroSpec(
+            name="mathlike",
+            kind="command",
+            parse_class=DemoEnv,
+            handler=_noop,
+            policy="render",
+        )
+    )
+    assert bridge.macro_specs["mathlike"].parse_class is DemoEnv
 
 
 def test_stub_policy_rejects_runtime_handler():
@@ -159,3 +174,11 @@ def test_env_decorator_can_register_through_macro_spec():
     spec = bridge.macro_specs["decorenv"]
     assert spec.kind == "env"
     assert spec.policy == "render"
+
+
+def test_global_registry_has_no_legacy_handler_or_macro_wiring_drift():
+    specs = set(latex.macro_specs)
+    assert set(latex.command_handlers) - specs == set()
+    assert set(latex.env_handlers) - specs == set()
+    assert set(latex.macro_handlers) - specs == set()
+    assert latex.macro_specs["color"].policy == "declaration"

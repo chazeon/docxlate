@@ -40,9 +40,12 @@ def validate_macro_spec(spec: MacroSpec) -> None:
     if spec.parse_class is not None:
         if not isinstance(spec.parse_class, type):
             raise ValueError(f"MacroSpec({name}) parse_class must be a class type")
-        if spec.kind == "command" and not issubclass(spec.parse_class, Command):
+        if spec.kind == "command" and not issubclass(
+            spec.parse_class, (Command, Environment)
+        ):
             raise ValueError(
-                f"MacroSpec({name}) kind='command' requires parse_class subclassing plasTeX.Command"
+                f"MacroSpec({name}) kind='command' requires parse_class subclassing "
+                "plasTeX.Command or plasTeX.Environment"
             )
         if spec.kind == "env" and not issubclass(spec.parse_class, Environment):
             raise ValueError(
