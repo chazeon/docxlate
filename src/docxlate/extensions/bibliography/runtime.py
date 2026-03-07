@@ -37,6 +37,23 @@ def _reference_number_for_key(key: str, index: int, cite_order: dict[str, int]) 
     return index + 1
 
 
+def _numeric_cite_order_from_bibcites(
+    bibcites: dict[str, dict[str, str]],
+) -> dict[str, int]:
+    ordered: list[tuple[int, str]] = []
+    for key, info in bibcites.items():
+        raw = str(info.get("ref_num", "")).strip()
+        try:
+            number = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if number <= 0:
+            continue
+        ordered.append((number, key))
+    ordered.sort(key=lambda pair: pair[0])
+    return {key: number for number, key in ordered}
+
+
 def _parse_positive_int(value: str) -> int | None:
     try:
         parsed = int(value)
@@ -101,6 +118,7 @@ def register(latex, *, plugin):
     def handle_cite(node):
         cite_order = latex.context.get("cite_order", {})
         refs = latex.context.get("refs", {})
+        bibcites = latex.context.get("bibcites", {})
         bib_links = latex.context.get("bib_entry_labels", {})
         bbl_entries = latex.context.get("bbl_entries", {})
         resolver = getattr(latex, "reference_resolver", None)
@@ -113,6 +131,9 @@ def register(latex, *, plugin):
             if ref_num is None:
                 ref_info = refs.get(label, {})
                 ref_num = ref_info.get("ref_num")
+            if ref_num is None:
+                bib_info = bibcites.get(label, {})
+                ref_num = bib_info.get("ref_num")
             resolved.append((label, str(ref_num) if ref_num is not None else label))
 
         seen_values: set[str] = set()
@@ -207,6 +228,7 @@ def register(latex, *, plugin):
         if not tex_path:
             return
         latex.context["cite_order"] = {}
+        latex.context["bibcites"] = {}
         latex.context["bbl_entries"] = {}
         latex.context["bib_entry_labels"] = {}
         aux_path = Path(tex_path).with_suffix(".aux")
@@ -215,10 +237,15 @@ def register(latex, *, plugin):
             cache_key = str(aux_path.resolve())
             cached = aux_cache.get(cache_key)
             if cached is None:
-                refs, _bibcites, cite_order = parse_aux_artifacts(aux_path)
-                cached = {"refs": refs, "cite_order": cite_order}
+                refs, bibcites, cite_order = parse_aux_artifacts(aux_path)
+                cached = {"refs": refs, "bibcites": bibcites, "cite_order": cite_order}
                 aux_cache[cache_key] = cached
+            latex.context["bibcites"] = dict(cached.get("bibcites", {}))
             latex.context["cite_order"] = dict(cached.get("cite_order", {}))
+            if not latex.context["cite_order"] and latex.context["bibcites"]:
+                latex.context["cite_order"] = _numeric_cite_order_from_bibcites(
+                    latex.context["bibcites"]
+                )
         bcf_path = Path(tex_path).with_suffix(".bcf")
         if bcf_path.exists() and not latex.context.get("cite_order"):
             latex.context["cite_order"] = parse_bcf(bcf_path)

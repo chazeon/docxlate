@@ -65,6 +65,13 @@ class ReferenceResolver:
 
     def register_label(self, latex, label_name: str, ref_text: str | None = None):
         self._ensure_state()
+        existing = self.context.get("labels", {}).get(label_name)
+        if existing is not None:
+            warning = f"Duplicate label ignored: {label_name}"
+            warnings = self.context.setdefault("warnings", [])
+            if warning not in warnings:
+                warnings.append(warning)
+            return
         paragraph = self._ensure_paragraph(latex)
         if paragraph is None:
             return

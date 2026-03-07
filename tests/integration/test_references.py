@@ -34,6 +34,15 @@ def test_missing_reference_emits_warning_and_placeholder():
     assert "missing" in warnings[0]
 
 
+def test_duplicate_label_does_not_create_duplicate_bookmark_names():
+    latex.run(r"\section{One}\label{dup:fig}\section{Two}\label{dup:fig} See \ref{dup:fig}.")
+
+    xml = "".join(p._element.xml for p in latex.doc.paragraphs)
+    assert xml.count('w:name="ref_dup_fig"') == 1
+    warnings = latex.context.get("warnings", [])
+    assert any("Duplicate label ignored: dup:fig" in message for message in warnings)
+
+
 def test_href_creates_external_link():
     latex.run(r"Open \href{https://example.com}{Example}.")
 

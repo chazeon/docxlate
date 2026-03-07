@@ -6,6 +6,23 @@ from docx import Document
 import pytest
 
 
+def _revtex_bbl_sample_text() -> str:
+    return r"""
+\begin{thebibliography}{2}%
+\bibitem [{\citenamefont {Doe}(2024)}]{KeyA}%
+  \BibitemOpen
+  \bibfield {author} {\bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Doe}},\ }
+  \bibfield {title} {\bibinfo {title} {Sample title A},\ }
+  \href {https://doi.org/10.1000/a} {\bibfield {journal} {\bibinfo {journal} {J. A}\ }\textbf {\bibinfo {volume} {1}},\ \bibinfo {pages} {1} (\bibinfo {year} {2024})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Roe}(2025)}]{KeyB}%
+  \BibitemOpen
+  \bibfield {author} {\bibinfo {author} {\bibfnamefont {B.}~\bibnamefont {Roe}},\ }
+  \bibfield {title} {\bibinfo {title} {Sample title B},\ }
+  \bibfield {journal} {\bibinfo {journal} {J. B}\ }\textbf {\bibinfo {volume} {2}},\ \bibinfo {pages} {11} (\bibinfo {year} {2025})\BibitemShut {NoStop}%
+\end{thebibliography}
+""".strip()
+
+
 def test_cite_single_key_maps_to_bracket_number():
     latex.context["cite_order"] = {"Foo2025": 12}
 
@@ -30,6 +47,17 @@ def test_cite_missing_key_falls_back_to_label():
     latex.run(r"\cite{UnknownKey}")
 
     assert "[UnknownKey]" in latex.doc.paragraphs[0].text
+
+
+def test_cite_falls_back_to_bibcite_number_when_cite_order_missing():
+    latex.context["cite_order"] = {}
+    latex.context["bibcites"] = {"Foo2025": {"ref_num": "12"}}
+
+    latex.run(r"See \cite{Foo2025}.")
+
+    text = latex.doc.paragraphs[0].text
+    assert "[12]" in text
+    assert "Foo2025" not in text
 
 
 def test_cite_text_is_present_when_mixed_with_textbf():
@@ -287,3 +315,30 @@ def test_cite_authoryear_mode_renders_names_and_year():
     latex.run(r"\cite{Smith2020}")
 
     assert "(Smith, 2020)" in latex.doc.paragraphs[0].text
+
+
+def test_references_section_revtex_bbl_and_bibcite_aux(tmp_path):
+    tex_path = tmp_path / "doc.tex"
+    aux_path = tmp_path / "doc.aux"
+    bbl_path = tmp_path / "doc.bbl"
+
+    tex_path.write_text(r"\cite{KeyA} and \cite{KeyB}.")
+    aux_path.write_text(
+        "\n".join(
+            [
+                r"\bibcite{KeyA}{{1}{2024}{{Doe}}{{Doe}}}",
+                r"\bibcite{KeyB}{{2}{2025}{{Roe}}{{Roe}}}",
+            ]
+        )
+    )
+    bbl_path.write_text(_revtex_bbl_sample_text())
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.run(tex_path.read_text())
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "[1]" in text
+    assert "[2]" in text
+    assert "References" in text
+    assert "Sample title A" in text
+    assert "Sample title B" in text

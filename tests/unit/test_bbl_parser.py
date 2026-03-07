@@ -3,6 +3,23 @@ from pathlib import Path
 from docxlate.bbl import format_bibliography_entry, parse_bbl
 
 
+def _revtex_bbl_sample_text() -> str:
+    return r"""
+\begin{thebibliography}{2}%
+\bibitem [{\citenamefont {Doe}(2024)}]{KeyA}%
+  \BibitemOpen
+  \bibfield {author} {\bibinfo {author} {\bibfnamefont {A.}~\bibnamefont {Doe}},\ }
+  \bibfield {title} {\bibinfo {title} {Sample title A},\ }
+  \href {https://doi.org/10.1000/a} {\bibfield {journal} {\bibinfo {journal} {J. A}\ }\textbf {\bibinfo {volume} {1}},\ \bibinfo {pages} {1} (\bibinfo {year} {2024})}\BibitemShut {NoStop}%
+\bibitem [{\citenamefont {Roe}(2025)}]{KeyB}%
+  \BibitemOpen
+  \bibfield {author} {\bibinfo {author} {\bibfnamefont {B.}~\bibnamefont {Roe}},\ }
+  \bibfield {title} {\bibinfo {title} {Sample title B},\ }
+  \bibfield {journal} {\bibinfo {journal} {J. B}\ }\textbf {\bibinfo {volume} {2}},\ \bibinfo {pages} {11} (\bibinfo {year} {2025})\BibitemShut {NoStop}%
+\end{thebibliography}
+""".strip()
+
+
 def test_parse_bbl_extracts_entries_and_fields():
     entries = parse_bbl(Path("tests/fixtures/bbl/sample.bbl"))
     assert "KeyA" in entries
@@ -155,3 +172,25 @@ def test_parse_bbl_preserves_tex_tokens_in_field_values(tmp_path):
     assert r"CO$_2$" in title
     assert r"\textit{" in title
     assert r"\_" in title
+
+
+def test_parse_bbl_revtex_bibitem_fallback_extracts_plain_text_entries(tmp_path):
+    bbl = tmp_path / "revtex.bbl"
+    bbl.write_text(_revtex_bbl_sample_text(), encoding="utf-8")
+    entries = parse_bbl(bbl)
+    assert "KeyA" in entries
+    assert "KeyB" in entries
+    assert entries["KeyA"]["type"] == "revtex-bibitem"
+    assert "Sample title A" in entries["KeyA"]["plain_text"]
+    assert "Sample title B" in entries["KeyB"]["plain_text"]
+
+
+def test_format_bibliography_entry_uses_plain_text_when_present():
+    formatted = format_bibliography_entry(
+        {
+            "plain_text": "Doe, A. Sample title.",
+            "fields": {"title": "Ignored"},
+            "authors": ["Ignored"],
+        }
+    )
+    assert formatted == "Doe, A. Sample title."

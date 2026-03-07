@@ -403,8 +403,8 @@ def on_load(tex_source, soup):
         cache_key = str(aux_path.resolve())
         cached = aux_cache.get(cache_key)
         if cached is None:
-            refs, _bibcites = parse_refs(aux_path)
-            cached = {"refs": refs}
+            refs, bibcites = parse_refs(aux_path)
+            cached = {"refs": refs, "bibcites": bibcites}
             aux_cache[cache_key] = cached
         latex.context["refs"] = dict(cached.get("refs", {}))
 

@@ -47,6 +47,54 @@ class endverb(Command):
     args = ""
 
 
+class bibitem(Command):
+    args = "[label] key:str"
+
+
+class BibitemOpen(Command):
+    args = ""
+
+
+class BibitemShut(Command):
+    args = "kind:str"
+
+
+class bibfield(Command):
+    args = "kind value"
+
+
+class bibinfo(Command):
+    args = "kind value"
+
+
+class bibitemNoStop(Command):
+    args = ""
+
+
+class bibitemStop(Command):
+    args = ""
+
+
+class EOS(Command):
+    args = ""
+
+
+class bibfnamefont(Command):
+    args = "self"
+
+
+class bibnamefont(Command):
+    args = "self"
+
+
+class citenamefont(Command):
+    args = "self"
+
+
+class href(Command):
+    args = "url:str self"
+
+
 @dataclass
 class BblEntry:
     key: str
@@ -187,6 +235,18 @@ def _create_tex_with_bbl_macros() -> TeX:
     tex = TeX()
     context = tex.ownerDocument.context
     for macro_name, macro_class in {
+        "bibitem": bibitem,
+        "BibitemOpen": BibitemOpen,
+        "BibitemShut": BibitemShut,
+        "bibfield": bibfield,
+        "bibinfo": bibinfo,
+        "bibitemNoStop": bibitemNoStop,
+        "bibitemStop": bibitemStop,
+        "EOS": EOS,
+        "bibfnamefont": bibfnamefont,
+        "bibnamefont": bibnamefont,
+        "citenamefont": citenamefont,
+        "href": href,
         "entry": entry,
         "endentry": endentry,
         "field": field,
@@ -199,6 +259,152 @@ def _create_tex_with_bbl_macros() -> TeX:
     }.items():
         context.addGlobal(macro_name, macro_class)
     return tex
+
+
+def _tex_to_plaintext(source: str) -> str:
+    one_arg_wrappers = {
+        "textbf",
+        "textit",
+        "emph",
+        "url",
+        "bibfnamefont",
+        "bibnamefont",
+        "citenamefont",
+        "natexlab",
+    }
+    two_arg_keep_second = {"bibfield", "bibinfo", "href", "Eprint"}
+    spacing_macros = {
+        ",": ",",
+        " ": " ",
+        "quad": " ",
+        "qquad": " ",
+        "slash": "/",
+    }
+
+    def _walk(text: str) -> str:
+        out: list[str] = []
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            if ch == "%":
+                while i < len(text) and text[i] != "\n":
+                    i += 1
+                continue
+            if ch == "{":
+                i += 1
+                continue
+            if ch == "}":
+                i += 1
+                continue
+            if ch != "\\":
+                out.append(ch)
+                i += 1
+                continue
+
+            i += 1
+            if i >= len(text):
+                break
+            token = text[i]
+            if token.isalpha() or token == "@":
+                j = i
+                while j < len(text) and (text[j].isalpha() or text[j] == "@"):
+                    j += 1
+                cmd = text[i:j]
+                i = j
+            else:
+                cmd = token
+                i += 1
+
+            if cmd in spacing_macros:
+                out.append(spacing_macros[cmd])
+                continue
+            if cmd in {"BibitemOpen", "BibitemShut", "bibitemStop", "bibitemNoStop"}:
+                if cmd == "BibitemShut":
+                    _ignored, i = _read_braced(text, i)
+                continue
+            if cmd in two_arg_keep_second:
+                _ignored, i = _read_braced(text, i)
+                value, i2 = _read_braced(text, i)
+                if i2 != i:
+                    out.append(_walk(value))
+                    i = i2
+                continue
+            if cmd in one_arg_wrappers:
+                value, i2 = _read_braced(text, i)
+                if i2 != i:
+                    out.append(_walk(value))
+                    i = i2
+                continue
+
+            value, i2 = _read_braced(text, i)
+            if i2 != i:
+                out.append(_walk(value))
+                i = i2
+            # Unknown control sequence without braces: drop token.
+
+        text_out = "".join(out)
+        text_out = re.sub(r"\s+", " ", text_out).strip()
+        text_out = re.sub(r"\s+([,.;:])", r"\1", text_out)
+        text_out = text_out.replace(" .", ".")
+        text_out = text_out.replace("$", "")
+        text_out = text_out.replace("~", " ")
+        return text_out
+
+    return _walk(source)
+
+
+def _slice_revtex_bibliography(source: str) -> str:
+    start = source.find("\\bibitem")
+    if start == -1:
+        return source
+    end = source.rfind("\\end{thebibliography}")
+    if end != -1 and end > start:
+        return source[start:end]
+    return source[start:]
+
+
+def _collect_revtex_entries(doc) -> dict[str, dict]:
+    entries: dict[str, dict] = {}
+
+    current_key: str | None = None
+    current_chunks: list[str] = []
+
+    def _flush_current():
+        nonlocal current_key, current_chunks
+        if not current_key:
+            return
+        plain_text = _tex_to_plaintext(" ".join(current_chunks))
+        entries[current_key] = {
+            "key": current_key,
+            "type": "revtex-bibitem",
+            "fields": {},
+            "authors": [],
+            "author_names": [],
+            "plain_text": plain_text,
+        }
+
+    for node in getattr(doc, "childNodes", []):
+        node_name = getattr(node, "nodeName", None)
+        if node_name == "bibitem":
+            _flush_current()
+            current_chunks = []
+            key = _normalize_identifier(_fragment_raw_text(node.attributes.get("key")))
+            current_key = key or None
+            continue
+        if current_key is None:
+            continue
+        if node_name == "bibfield":
+            current_chunks.append(_fragment_raw_text(node.attributes.get("value")))
+            continue
+        if node_name in {"href", "Eprint"}:
+            current_chunks.append(_fragment_raw_text(node.attributes.get("self")))
+            continue
+        if node_name == "#text":
+            current_chunks.append(str(node))
+            continue
+
+    _flush_current()
+    return entries
 
 
 def _collect_entries(doc) -> dict[str, BblEntry]:
@@ -300,7 +506,17 @@ def parse_bbl(fname: str | Path) -> dict[str, dict]:
     doc = tex.parse()
 
     entries = _collect_entries(doc)
-    return {key: entry_data.to_dict() for key, entry_data in entries.items()}
+    if entries:
+        return {key: entry_data.to_dict() for key, entry_data in entries.items()}
+
+    # RevTeX/apsrev-style .bbl files use \bibitem blocks instead of biblatex
+    # \entry structures. Parse those blocks through plasTeX and extract plain
+    # reference rows from parsed nodes.
+    revtex_source = _slice_revtex_bibliography(Path(fname).read_text(encoding="utf-8"))
+    revtex_tex = _create_tex_with_bbl_macros()
+    revtex_tex.input(revtex_source)
+    revtex_doc = revtex_tex.parse()
+    return _collect_revtex_entries(revtex_doc)
 
 
 DEFAULT_BIB_TEMPLATE = r"""
@@ -343,6 +559,9 @@ def format_bibliography_entry(
     template: str | None = None,
     et_al_limit: int = 3,
 ) -> str:
+    plain_text = str(entry_data.get("plain_text", "")).strip()
+    if plain_text:
+        return plain_text
     fields = entry_data.get("fields", {})
     authors = [a for a in entry_data.get("authors", []) if a]
     author_names = [
