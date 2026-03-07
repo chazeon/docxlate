@@ -16,6 +16,7 @@ from plasTeX.Tokenizer import Tokenizer
 
 from .docx_ext import DocxEmitterBackend
 from .model import EquationSpec, LinkTarget, RenderContext, SpanCompositor
+from .registry import MacroSpec, normalize_macro_name, validate_macro_spec
 
 
 class DocxlateDirectiveTokenizer(Tokenizer):
@@ -67,6 +68,7 @@ class LatexBridge:
         self.aux_data = {}
         self.event_handlers: dict[str, list] = defaultdict(list)
         self.macro_handlers: dict[str, type] = {}
+        self.macro_specs: dict[str, MacroSpec] = {}
         self.context: dict = {}  # For storing state across handlers/events
         self._current_paragraph = None
         self._render_stack: list[dict] = []
@@ -152,20 +154,50 @@ class LatexBridge:
                 continue
             body.remove(child)
 
-    def command(self, name, *, inline=False):
+    def command(
+        self,
+        name,
+        *,
+        inline=False,
+        parse_class=None,
+        policy="render",
+    ):
         """Decorator: @app.command('section')"""
 
         def decorator(f):
-            self.command_handlers[name] = (f, inline)
+            if parse_class is None and policy == "render":
+                self.command_handlers[name] = (f, inline)
+                return f
+            self.register_spec(
+                MacroSpec(
+                    name=name,
+                    kind="command",
+                    parse_class=parse_class,
+                    handler=f,
+                    inline=inline,
+                    policy=policy,
+                )
+            )
             return f
 
         return decorator
 
-    def env(self, name):
+    def env(self, name, *, parse_class=None, policy="render"):
         """Decorator: @app.env('equation')"""
 
         def decorator(f):
-            self.env_handlers[name] = f
+            if parse_class is None and policy == "render":
+                self.env_handlers[name] = f
+                return f
+            self.register_spec(
+                MacroSpec(
+                    name=name,
+                    kind="env",
+                    parse_class=parse_class,
+                    handler=f,
+                    policy=policy,
+                )
+            )
             return f
 
         return decorator
@@ -183,6 +215,81 @@ class LatexBridge:
         """Register a plasTeX macro class for parse-time argument handling."""
         self.macro_handlers[name] = macro_class
 
+    def register_spec(self, spec: MacroSpec):
+        validate_macro_spec(spec)
+        name = normalize_macro_name(spec.name)
+        normalized = MacroSpec(
+            name=name,
+            kind=spec.kind,
+            parse_class=spec.parse_class,
+            handler=spec.handler,
+            inline=spec.inline,
+            policy=spec.policy,
+        )
+
+        existing_spec = self.macro_specs.get(name)
+        if existing_spec is not None:
+            raise ValueError(
+                f"Duplicate MacroSpec registration for {name!r} "
+                f"(existing kind={existing_spec.kind!r}, new kind={normalized.kind!r})"
+            )
+
+        if normalized.kind == "command" and name in self.env_handlers:
+            raise ValueError(
+                f"Conflicting registration for {name!r}: already registered as environment handler"
+            )
+        if normalized.kind == "env" and name in self.command_handlers:
+            raise ValueError(
+                f"Conflicting registration for {name!r}: already registered as command handler"
+            )
+
+        if normalized.parse_class is not None:
+            existing_macro = self.macro_handlers.get(name)
+            if existing_macro is not None and existing_macro is not normalized.parse_class:
+                raise ValueError(
+                    f"Conflicting parse-class registration for {name!r}: "
+                    f"{existing_macro!r} vs {normalized.parse_class!r}"
+                )
+            self.macro(name, normalized.parse_class)
+
+        if normalized.policy == "render":
+            if normalized.kind == "command":
+                self.command_handlers[name] = (normalized.handler, normalized.inline)
+            else:
+                self.env_handlers[name] = normalized.handler
+
+        self.macro_specs[name] = normalized
+
+    def register_specs(self, specs):
+        for spec in specs:
+            self.register_spec(spec)
+
+    def validate_macro_registry(self):
+        for name, spec in self.macro_specs.items():
+            validate_macro_spec(spec)
+            if spec.policy == "render":
+                if spec.parse_class is None:
+                    raise ValueError(
+                        f"MacroSpec({name}) policy='render' is missing parse_class"
+                    )
+                if name not in self.macro_handlers:
+                    raise ValueError(
+                        f"MacroSpec({name}) policy='render' is not wired to parser globals"
+                    )
+                if spec.kind == "command" and name not in self.command_handlers:
+                    raise ValueError(
+                        f"MacroSpec({name}) policy='render' is missing command handler wiring"
+                    )
+                if spec.kind == "env" and name not in self.env_handlers:
+                    raise ValueError(
+                        f"MacroSpec({name}) policy='render' is missing environment handler wiring"
+                    )
+                continue
+            if spec.parse_class is None:
+                raise ValueError(
+                    f"MacroSpec({name}) policy={spec.policy!r} is missing parse_class"
+                )
+
     def handle_event(self, event_name, *args, **kwargs):
         """Trigger an event handler if it exists."""
         if event_name in self.event_handlers:
@@ -192,6 +299,7 @@ class LatexBridge:
     def run(self, tex_source, aux_path=None):
         """The 'app.run()' equivalent: Process the document."""
 
+        self.validate_macro_registry()
         parsed_tree = self._parse_source(tex_source)
         self.context["parser_engine_used"] = "plastex"
         self._render_stack.clear()

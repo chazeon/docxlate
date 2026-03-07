@@ -19,19 +19,24 @@ class docxlatefigwrapset(Command):
     args = "path:str value:str"
 
 
-def register_macros(latex):
-    for macro_name, macro_class in {
+def figure_macro_classes() -> dict[str, type[Command] | type[Environment]]:
+    return {
         "includegraphics": includegraphics,
         "caption": caption,
         "wrapfigure": wrapfigure,
         "docxlatefigwrapset": docxlatefigwrapset,
-    }.items():
+    }
+
+
+def register_macros(latex):
+    for macro_name, macro_class in figure_macro_classes().items():
         latex.macro(macro_name, macro_class)
 
 
 __all__ = [
     "caption",
     "docxlatefigwrapset",
+    "figure_macro_classes",
     "includegraphics",
     "register_macros",
     "wrapfigure",

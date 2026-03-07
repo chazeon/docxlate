@@ -141,35 +141,26 @@ def register(latex):
     resolver = ReferenceResolver(latex.context)
     latex.reference_resolver = resolver
 
-    for macro_name, macro_class in {
-        "href": href,
-        "hyperref": hyperref,
-        "eqref": eqref,
-        "ref": ref,
-        "label": label,
-    }.items():
-        latex.macro(macro_name, macro_class)
-
-    @latex.command("label", inline=True)
+    @latex.command("label", inline=True, parse_class=label)
     def handle_label(node):
         label_name = latex.get_arg_text(node, 0, key="label")
         if not label_name:
             return
         resolver.register_label(latex, label_name)
 
-    @latex.command("ref", inline=True)
+    @latex.command("ref", inline=True, parse_class=ref)
     def handle_ref(node):
         label_name = latex.get_arg_text(node, 0, key="label")
         ref_text = resolver.resolve_ref_text(label_name)
         resolver.append_internal_link(latex, label_name, ref_text)
 
-    @latex.command("eqref", inline=True)
+    @latex.command("eqref", inline=True, parse_class=eqref)
     def handle_eqref(node):
         label_name = latex.get_arg_text(node, 0, key="label")
         ref_text = resolver.resolve_ref_text(label_name)
         resolver.append_internal_link(latex, label_name, f"({ref_text})")
 
-    @latex.command("href", inline=True)
+    @latex.command("href", inline=True, parse_class=href)
     def handle_href(node):
         url = latex.get_arg_text(node, 0, key="url")
         normalized_url = _normalize_external_url(url)
@@ -182,7 +173,7 @@ def register(latex):
         text = latex.get_arg_text(node, 1, key="self") or (normalized_url or url)
         resolver.append_external_link(latex, url, text)
 
-    @latex.command("hyperref", inline=True)
+    @latex.command("hyperref", inline=True, parse_class=hyperref)
     def handle_hyperref(node):
         label_name = latex.get_arg_text(node, 0, key="label")
         anchor_name = resolver.anchor_name(label_name)

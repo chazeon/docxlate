@@ -15,6 +15,10 @@ class DocxlateBibEntry(Command):
     args = "idx:str self"
 
 
+class cite(Command):
+    args = "bibkeys:str"
+
+
 BIBLIOGRAPHY_MACRO_DEFAULTS: dict[str, str] = {
     "bibrangedash": "\u2013",
     "bibinitperiod": ".",
@@ -82,14 +86,18 @@ def _compress_numeric_cite_items(
 
 
 def register(latex, *, plugin):
-    latex.macro("docxlatebibentry", DocxlateBibEntry)
-
     for macro_name in BIBLIOGRAPHY_MACRO_DEFAULTS:
-        @latex.command(macro_name, inline=True)
+        macro_class = type(
+            f"BibMacro_{macro_name}",
+            (Command,),
+            {"macroName": macro_name, "args": ""},
+        )
+
+        @latex.command(macro_name, inline=True, parse_class=macro_class)
         def _handle_bibliography_macro(_node, _macro_name=macro_name):
             latex.append_inline(plugin.macro_text(latex, _macro_name))
 
-    @latex.command("cite", inline=True)
+    @latex.command("cite", inline=True, parse_class=cite)
     def handle_cite(node):
         cite_order = latex.context.get("cite_order", {})
         refs = latex.context.get("refs", {})
@@ -140,7 +148,11 @@ def register(latex, *, plugin):
                 latex.append_inline(value)
         latex.append_inline("]")
 
-    @latex.command("docxlatebibentry", inline=True)
+    @latex.command(
+        "docxlatebibentry",
+        inline=True,
+        parse_class=DocxlateBibEntry,
+    )
     def handle_docxlate_bib_entry(node):
         idx_text = latex.get_arg_text(node, 0, key="idx")
         try:

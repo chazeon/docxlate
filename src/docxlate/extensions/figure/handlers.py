@@ -10,6 +10,7 @@ from .geometry.image import resolve_image_path, resolve_target_width_emu
 from .geometry.wrap import wrapped_figure_box_size
 from .layout.anchor_host import trim_trailing_whitespace_runs
 from .layout.caption_box import estimate_caption_box_height_emu
+from .macros import caption, docxlatefigwrapset, includegraphics, wrapfigure
 
 
 def _current_wrap_entry(latex) -> dict | None:
@@ -66,7 +67,11 @@ def _apply_wrap_directive(entry: dict, path: str, inches: float) -> bool:
 
 
 def register_handlers(latex, *, plugin):
-    @latex.command("docxlatefigwrapset", inline=True)
+    @latex.command(
+        "docxlatefigwrapset",
+        inline=True,
+        parse_class=docxlatefigwrapset,
+    )
     def handle_docxlatefigwrapset(node):
         path = latex.get_arg_text(node, 0, key="path").strip().lower()
         value = latex.get_arg_text(node, 1, key="value")
@@ -87,7 +92,7 @@ def register_handlers(latex, *, plugin):
                 f"Invalid or unsupported docxlate wrap directive: {path}={value}"
             )
 
-    @latex.command("includegraphics", inline=True)
+    @latex.command("includegraphics", inline=True, parse_class=includegraphics)
     def handle_includegraphics(node):
         raw_path = latex.get_arg_text(node, 0, key="file")
         image_path = resolve_image_path(latex, raw_path)
@@ -127,7 +132,7 @@ def register_handlers(latex, *, plugin):
                 # Keep group width synced with actual rendered picture width.
                 stack[-1]["target_cx_emu"] = rendered_cx if rendered_cx > 0 else target_width_emu
 
-    @latex.command("caption", inline=True)
+    @latex.command("caption", inline=True, parse_class=caption)
     def handle_caption(node):
         stack = latex.context.get("figure_stack", [])
         caption_ctx = RenderContext().with_para_role("caption")
@@ -195,7 +200,7 @@ def register_handlers(latex, *, plugin):
                 if image_run is None:
                     stack[-1]["wrapped_emitted"] = True
 
-    @latex.env("wrapfigure")
+    @latex.env("wrapfigure", parse_class=wrapfigure)
     def handle_wrapfigure(node):
         lines = latex.get_arg_text(node, 0, key="lines")
         place = latex.get_arg_text(node, 0, key="place")

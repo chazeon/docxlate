@@ -6,6 +6,7 @@ from .extensions import (
     register_figures_extension,
     register_hyperref_extension,
     register_lists_extension,
+    register_table_extension,
 )
 from .model import RenderContext
 from pathlib import Path
@@ -16,6 +17,7 @@ from plasTeX import Command
 latex = LatexBridge()
 register_hyperref_extension(latex)
 register_lists_extension(latex)
+register_table_extension(latex)
 register_figures_extension(latex)
 register_bibliography_extension(latex)
 
