@@ -21,8 +21,10 @@ As of March 6, 2026, the following decisions are locked:
   - [x] Apply `MacroSpec` path to new table extension first.
   - [x] Add registry integrity tests.
 
-- [x] Broader Registry Migration (moved earlier per priority)
-  - [x] Migrate `hyperref`, `figure`, `bibliography`, `lists` to `MacroSpec`.
+- [ ] Broader Registry Migration (moved earlier per priority)
+  - [ ] Migrate `hyperref`, `figure`, `bibliography`, `lists` to `MacroSpec`.
+    - [x] `hyperref`, `bibliography`, `lists` are on spec-backed paths.
+    - [ ] figure still has legacy parse registration (`src/docxlate/extensions/figure/macros.py`).
   - [x] Preserve decorator ergonomics via spec-aware decorators.
   - [x] Add/refresh regression coverage for registration wiring.
 
@@ -54,7 +56,28 @@ As of March 6, 2026, the following decisions are locked:
   - [x] Sizing/alignment refinements.
   - [x] XML-level regression tests.
 
-- [ ] Priority 6: Core (`core.py`) cleanup and boundary tightening
+- [ ] Priority 6: Audit closure - failing baseline tests
+  - [ ] Replace local-file-dependent aux assertion with fixture-driven test data.
+    - [ ] move `tests/test_aux.py` to a stable fixture under `tests/fixtures/`.
+    - [ ] assert expected labels from fixture artifact, not mutable project-local `main.aux`.
+  - [ ] Align citation inline test with current bibliography post-process contract.
+    - [ ] update/split `tests/test_inline.py::test_cite_produces_inline_reference`.
+    - [ ] assert expected references append behavior when `cite_order` is present.
+  - [ ] Validation gate: `uv run pytest -q` with no unexpected failures.
+
+- [ ] Priority 7: MacroSpec end-state closure for figure macros
+  - [ ] Replace direct `latex.macro(...)` figure parse registration with explicit MacroSpec wiring.
+  - [ ] Add/extend registry integrity checks to fail on remaining legacy figure macro registration.
+  - [ ] Keep figure integration tests green (`tests/integration/test_figures.py` and related suites).
+
+- [ ] Priority 8: OOXML boundary reconciliation (docs vs implementation)
+  - [ ] Decide and document one path:
+    - [ ] Option A: move OMML/direct OOXML helper ownership to `docx_ext`.
+    - [ ] Option B: keep in `utils.py` and narrow architecture wording to an explicit exception.
+  - [ ] Apply the selected change in code/docs.
+  - [ ] Add regression coverage for the chosen boundary contract.
+
+- [ ] Priority 9: Core (`core.py`) cleanup and boundary tightening
   - [ ] Complete **Core Audit: `LatexBridge` abstraction and cleanup** below.
 
 ## MacroSpec Completion Checklist (Handler Audit)
@@ -76,7 +99,7 @@ Status update (March 2026): core handlers are explicitly `MacroSpec`-backed; str
   - [x] `command_handlers - macro_specs == empty`
   - [x] `env_handlers - macro_specs == empty`
   - [x] parse-only macros must appear in `macro_specs` with explicit non-render policy.
-- [ ] Decide enforcement mode for decorators:
+- [x] Decide enforcement mode for decorators:
   - [x] Keep temporary fallback (`@latex.command(...` without `parse_class`) during migration only.
   - [x] Add strict mode (or direct failure) after migration completion.
 
@@ -204,7 +227,7 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [x] when to use `render`
   - [x] when to use `stub`
   - [x] when to use `declaration`
-- [ ] Define migration end-state for decorators:
+- [x] Define migration end-state for decorators:
   - [x] temporary compatibility for `@latex.command/@latex.env` without `parse_class` (transition only)
   - [x] strict enforcement plan and cutoff point (strict `MacroSpec` end-state approved)
 - [x] Document core handler parse-class mapping plan:
@@ -216,17 +239,53 @@ Move color-related macro classes and handler registration into a dedicated exten
 - [x] Document unknown-macro warning policy and CI enforcement:
   - [x] strict vs allowlisted behavior
   - [x] where allowlist lives
-- [ ] Track baseline known test failures explicitly (pre-existing vs regression).
-- [ ] Document color behavior split contract:
+- [x] Track baseline known test failures explicitly (pre-existing vs regression).
+- [x] Document color behavior split contract:
   - [x] declaration-style color application in core (temporary during extraction)
   - [x] command-level color handlers in extension (target ownership)
-- [ ] Mark current table status explicitly:
+- [x] Mark current table status explicitly:
   - [x] MacroSpec-backed table handlers are present (`table`/`tabular` render, `multicolumn` stub)
   - [x] native DOCX table rendering is implemented for MVP
 - [ ] Document global singleton/runtime state expectations:
   - [ ] shared `latex` bridge instance
   - [ ] required reset behavior in tests and CLI runs
 - [ ] Document deprecation/removal path for direct `latex.macro(...)` legacy registrations.
+
+## Broad Audit Findings (March 7, 2026)
+
+Scope: post-recovery-fix audit on `main` after commits `7601dd2`, `08c7ad5`, `a588dcc`, `c54accb`, `c72c6b0`.
+
+### Verified
+
+- Word recovery regression fix is in place and covered:
+  - `src/docxlate/utils.py` now uses Word-safe math run properties (`w:rPr` under `m:r`) and avoids `m:rPr/m:ctrlPr` for inline math runs.
+  - `tests/integration/test_core_rendering.py::test_regression_word_recovery_math_color_uses_safe_run_properties` exists.
+- Parent/child checklist states were normalized for completed decorator/color/table documentation items in this TODO.
+- No tracked bisect/debug artifacts remain in repo.
+- Working tree is clean except expected user-local untracked manuscript files.
+
+### Open Findings
+
+- Test suite baseline is not fully green (`2 failed, 226 passed, 3 xfailed` from `uv run pytest -q`):
+  - `tests/test_aux.py::test_parse_refs_contains_known_label` relies on local `main.aux` content and currently expects `fig:overview-framework`, but current local artifact labels differ (e.g., `fig:deep-water-cycle`).
+  - `tests/test_inline.py::test_cite_produces_inline_reference` expects one paragraph only, but bibliography post-process appends references when `cite_order` exists (`src/docxlate/extensions/bibliography/runtime.py`, `append_references`).
+- MacroSpec end-state is not complete yet:
+  - figure macro registration still has a direct legacy path (`src/docxlate/extensions/figure/macros.py` uses `latex.macro(...)`).
+- Architecture/code contract mismatch remains:
+  - `docs/04_architecture.md` states direct OOXML manipulation should be isolated to `docx_ext`.
+  - `src/docxlate/utils.py` still performs direct OOXML manipulation for OMML/text run properties.
+
+### Follow-up Actions
+
+- Stabilize failing tests:
+  - Replace `tests/test_aux.py` dependency on mutable local `main.aux` with a fixture under `tests/fixtures/`.
+  - Update or split `test_cite_produces_inline_reference` to match explicit bibliography post-process behavior.
+- Close documentation drift:
+  - Normalize parent checkbox states in this TODO as child items complete.
+  - Either migrate remaining direct `latex.macro(...)` registrations to MacroSpec or explicitly document exception scope.
+  - Reconcile `docs/04_architecture.md` OOXML boundary statement with current `utils.py` responsibilities.
+
+Execution tracking for these items is now captured in **Priority 6 / Priority 7 / Priority 8** above.
 
 ## Core Audit: `LatexBridge` abstraction and cleanup
 
