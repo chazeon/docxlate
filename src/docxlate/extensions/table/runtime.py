@@ -4,6 +4,7 @@ import re
 
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Inches, Mm, Pt
 from plasTeX import Command, Environment
 
 from docxlate.model import RenderContext
@@ -15,7 +16,7 @@ class table(Environment):
 
 
 class tabular(Environment):
-    args = "colspec:str"
+    args = "colspec"
 
 
 class multicolumn(Command):
@@ -54,8 +55,7 @@ def _split_tabular_rows(nodes: list) -> list[list[list]]:
 
 
 def _alignment_tokens_from_colspec(colspec: str) -> list[str]:
-    # MVP parser: recognize only simple LaTeX alignment tokens.
-    return [token for token in re.findall(r"[clr]", colspec or "")]
+    return [item["align"] for item in _colspec_descriptors(colspec)]
 
 
 def _alignment_for_token(token: str):
@@ -64,6 +64,77 @@ def _alignment_for_token(token: str):
     if token == "r":
         return WD_ALIGN_PARAGRAPH.RIGHT
     return WD_ALIGN_PARAGRAPH.LEFT
+
+
+def _read_braced(text: str, start: int) -> tuple[str, int]:
+    i = start
+    while i < len(text) and text[i].isspace():
+        i += 1
+    if i >= len(text) or text[i] != "{":
+        return "", i
+    depth = 0
+    i += 1
+    begin = i
+    while i < len(text):
+        ch = text[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                return text[begin:i], i + 1
+            depth -= 1
+        i += 1
+    return text[begin:], len(text)
+
+
+def _parse_length_emu(value: str, *, textwidth_emu: int | None) -> int | None:
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return None
+
+    m = re.fullmatch(
+        r"([0-9]*\.?[0-9]+)\s*(\\textwidth|in|cm|mm|pt)",
+        cleaned,
+    )
+    if m is None:
+        return None
+    scalar = float(m.group(1))
+    unit = m.group(2)
+    if unit == "\\textwidth":
+        if textwidth_emu is None:
+            return None
+        return int(scalar * textwidth_emu)
+    if unit == "in":
+        return int(Inches(scalar))
+    if unit == "cm":
+        return int(Cm(scalar))
+    if unit == "mm":
+        return int(Mm(scalar))
+    if unit == "pt":
+        return int(Pt(scalar))
+    return None
+
+
+def _colspec_descriptors(colspec: str) -> list[dict[str, str | int | None]]:
+    out: list[dict[str, str | int | None]] = []
+    text = str(colspec or "")
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch.isspace() or ch == "|":
+            i += 1
+            continue
+        if ch in {"l", "c", "r"}:
+            out.append({"align": ch, "width_spec": None})
+            i += 1
+            continue
+        if ch in {"p", "m", "b"}:
+            width_spec, nxt = _read_braced(text, i + 1)
+            out.append({"align": "l", "width_spec": width_spec.strip() if width_spec else None})
+            i = max(i + 1, nxt)
+            continue
+        i += 1
+    return out
 
 
 def _resolve_table_style(doc, *, candidates: list[str], fallback: str | None) -> str | None:
@@ -165,6 +236,7 @@ def register(latex, *, plugin):
             return None
 
         colspec = latex.get_arg_text(node, 0, key="colspec")
+        descriptors = _colspec_descriptors(colspec)
         align_tokens = _alignment_tokens_from_colspec(colspec)
         row_models: list[list[tuple[list, int, str | None]]] = []
         max_cols = 0
@@ -197,6 +269,30 @@ def register(latex, *, plugin):
                     f"Failed to apply table style: {selected_style}"
                 )
         doc_table.autofit = plugin.autofit(latex)
+
+        textwidth_emu = None
+        try:
+            section = latex.doc.sections[-1]
+            textwidth_emu = int(section.page_width) - int(section.left_margin) - int(section.right_margin)
+        except Exception:
+            textwidth_emu = None
+
+        has_explicit_width = False
+        for idx, desc in enumerate(descriptors):
+            if idx >= col_count:
+                break
+            width_spec = desc.get("width_spec")
+            if not isinstance(width_spec, str) or not width_spec:
+                continue
+            width_emu = _parse_length_emu(width_spec, textwidth_emu=textwidth_emu)
+            if width_emu is None or width_emu <= 0:
+                continue
+            has_explicit_width = True
+            doc_table.columns[idx].width = width_emu
+            for row_idx in range(len(row_models)):
+                doc_table.cell(row_idx, idx).width = width_emu
+        if has_explicit_width:
+            doc_table.autofit = False
 
         anchor_paragraph = None
         for row_idx, row_cells in enumerate(row_models):

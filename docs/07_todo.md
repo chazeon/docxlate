@@ -49,9 +49,9 @@ As of March 6, 2026, the following decisions are locked:
   - [x] In-cell text/math/image rendering via existing pipelines.
   - [x] `table` caption/label with `.aux` number resolution.
 
-- [ ] Priority 5: Table Structural Expansion
+- [x] Priority 5: Table Structural Expansion
   - [x] `multicolumn` horizontal merging.
-  - [ ] Sizing/alignment refinements.
+  - [x] Sizing/alignment refinements.
   - [x] XML-level regression tests.
 
 - [ ] Priority 6: Core (`core.py`) cleanup and boundary tightening

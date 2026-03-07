@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 from docxlate.handlers import latex
 
 
@@ -98,3 +100,21 @@ def test_tabular_multicolumn_merges_cells_horizontally():
     xml = table._tbl.xml
     assert 'w:gridSpan w:val="2"' in xml
     assert "BC" in "\n".join(cell.text for row in table.rows for cell in row.cells)
+
+
+def test_tabular_applies_colspec_alignment_tokens():
+    latex.run(r"\begin{tabular}{c r}A & B\end{tabular}")
+
+    table = latex.doc.tables[0]
+    assert table.cell(0, 0).paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+    assert table.cell(0, 1).paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.RIGHT
+
+
+def test_tabular_p_column_width_applies_fixed_cell_width():
+    latex.run(r"\begin{tabular}{p{0.25\textwidth} c}Wide & X\end{tabular}")
+
+    table = latex.doc.tables[0]
+    left_cell = table.cell(0, 0)
+    width = int(left_cell.width) if left_cell.width is not None else 0
+    assert width > 0
+    assert table.autofit is False
