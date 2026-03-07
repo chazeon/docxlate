@@ -596,11 +596,7 @@ class LatexBridge:
         self, nodes, render_context: RenderContext | Mapping[str, object] | None = None
     ) -> RenderContext:
         active_ctx = self._coerce_render_context(render_context)
-        node_list = list(nodes or [])
-        i = 0
-        while i < len(node_list):
-            node = node_list[i]
-            i += 1
+        for node in nodes:
             kind = self._node_kind(node)
 
             if kind == "text":
@@ -647,26 +643,6 @@ class LatexBridge:
             if name in self._inline_styles:
                 self._walk(children, active_ctx.apply_style_delta(self._inline_styles[name]))
                 continue
-
-            if name in {"$", "math"}:
-                handler_entry = self.command_handlers.get(name)
-                if handler_entry and handler_entry[1]:
-                    combined_math = self.get_math_source(node)
-                    j = i
-                    while j < len(node_list):
-                        next_node = node_list[j]
-                        next_name = self._node_name(next_node)
-                        if next_name not in {"$", "math"}:
-                            break
-                        next_handler = self.command_handlers.get(next_name)
-                        if not next_handler or not next_handler[1]:
-                            break
-                        combined_math += self.get_math_source(next_node)
-                        j += 1
-                    if j > i:
-                        self.append_math(combined_math)
-                        i = j
-                        continue
 
             handler_entry = self.command_handlers.get(name)
             if handler_entry:
@@ -936,16 +912,7 @@ class LatexBridge:
             if not paragraph.runs:
                 return
             if paragraph.runs[-1].text.endswith(" "):
-                # If the latest emitted paragraph child is inline math, preserve
-                # this separator space instead of collapsing it away based on an
-                # earlier run. Otherwise adjacent OMML fragments can be emitted
-                # back-to-back and trigger Word recovery rewrites.
-                last_child = paragraph._p[-1] if len(paragraph._p) else None
-                if (
-                    last_child is None
-                    or not str(getattr(last_child, "tag", "")).endswith("}oMath")
-                ):
-                    return
+                return
             text = " "
         self._append_text(text, context=render_context)
 

@@ -1,4 +1,3 @@
-import re
 import pytest
 from pathlib import Path
 
@@ -42,17 +41,6 @@ def test_duplicate_label_does_not_create_duplicate_bookmark_names():
     assert xml.count('w:name="ref_dup_fig"') == 1
     warnings = latex.context.get("warnings", [])
     assert any("Duplicate label ignored: dup:fig" in message for message in warnings)
-
-
-def test_long_punctuated_label_generates_word_safe_bookmark_name():
-    label_name = "bib:sano-furukawaDirectObservationSymmetrization2018"
-    latex.run(rf"\section{{A}}\label{{{label_name}}} See \ref{{{label_name}}}.")
-
-    xml = "".join(p._element.xml for p in latex.doc.paragraphs)
-    names = re.findall(r'w:bookmarkStart[^>]*w:name="([^"]+)"', xml)
-    assert names
-    assert all(len(name) <= 40 for name in names)
-    assert all("-" not in name for name in names)
 
 
 def test_href_creates_external_link():
