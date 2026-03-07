@@ -173,7 +173,8 @@ def register_handlers(latex, *, plugin):
             image_cy = int(stack[-1].get("image_cy_emu", 1000000))
 
             if image_run is not None and anchor_mode != "separate":
-                latex.emit_wrapped_figure_caption_group_anchor(
+                latex.emitter.emit_wrapped_figure_caption_group_anchor(
+                    latex.doc,
                     image_run=image_run,
                     caption_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
@@ -187,7 +188,8 @@ def register_handlers(latex, *, plugin):
                 )
                 stack[-1]["wrapped_emitted"] = True
             else:
-                latex.emit_wrapped_caption_anchor(
+                latex.emitter.emit_wrapped_caption_anchor(
+                    latex.doc,
                     source_paragraph=p,
                     anchor_paragraph=stack[-1].get("anchor_paragraph"),
                     place=stack[-1].get("place"),
@@ -238,7 +240,7 @@ def register_handlers(latex, *, plugin):
             if stack and stack[-1].get("kind") == "wrapfigure":
                 image_run = stack[-1].get("image_run")
                 if image_run is not None and not stack[-1].get("wrapped_emitted"):
-                    anchor = latex.convert_image_run_to_wrap_anchor(
+                    anchor = latex.emitter.convert_image_run_to_wrap_anchor(
                         image_run,
                         place=stack[-1].get("place"),
                         pos_y_emu=int(stack[-1].get("pos_y_emu", plugin.wrap_offset_y_emu(latex))),

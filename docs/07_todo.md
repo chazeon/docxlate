@@ -238,11 +238,11 @@ Move color-related macro classes and handler registration into a dedicated exten
   - AST traversal/dispatch
   - inline/declaration style semantics
   - paragraph/layout state machine
-  - plugin-specific helper surfaces (figure/wrap emit passthrough)
+  - bridge/runtime state and backend plumbing that still needs subsystem extraction
 - Core contains feature-specific logic that should live in feature modules:
   - `DocxlateDirectiveTokenizer` now uses extension-registered directive rules (figure wrap pattern moved out of core).
   - `_parse_source` now uses extension-registered parse-compat skip policies (`xcolor` behavior moved to extension layer).
-  - figure/wrap emitter passthrough methods expose figure-specific backend concepts
+  - figure/wrap emitter passthrough methods have been removed from `LatexBridge`; figure extension calls backend capabilities directly.
 - Registration remains in mixed mode:
   - spec-based registration exists
   - legacy decorator fallback still allowed when `parse_class` omitted
@@ -258,10 +258,10 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [ ] traversal/dispatch engine (`_walk`, node helpers)
   - [ ] paragraph/render state management (frame + whitespace + paragraph flush rules)
   - [ ] registration/registry API surface
-- [ ] Move feature-specific policy out of core:
+- [x] Move feature-specific policy out of core:
   - [x] move figure directive tokenization pattern out of core tokenizer (or make extensible hook registry)
   - [x] move xcolor parse-skip heuristics to extension/config compatibility layer
-  - [ ] reduce figure-specific wrapper methods on `LatexBridge` to a smaller backend capability boundary
+  - [x] reduce figure-specific wrapper methods on `LatexBridge` to a smaller backend capability boundary
 - [ ] Complete registration enforcement:
   - [ ] remove/lock down legacy fallback registration path
   - [ ] ensure all active handlers/macros are represented via `MacroSpec`
