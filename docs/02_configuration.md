@@ -62,6 +62,16 @@ Handles both standard `figure` and `wrapfigure` environments.
         - **List**: `[x, y]` (e.g., `[0, 0.05]`).
         - **Mapping**: `{x: 0, y: 0.05}`.
 
+### Table Plugin (`plugins.table`)
+
+Controls native Word table rendering for `tabular`/`table`.
+
+- `style_candidates`: (List[String]) ordered style names/IDs to try first.
+- `fallback_style`: (String) style used when candidates are unavailable. Default: `Table Grid`.
+- `autofit`: (Bool) whether generated Word tables use auto-fit behavior. Default: `true`.
+- `header`: (Mapping) reserved table header options.
+    - `first_row_bold`: (Bool) reserved option for first-row emphasis.
+
 ## Example `docxlate.yaml`
 
 ```yaml
@@ -89,6 +99,12 @@ plugins:
         pad: 0.2
         shift:
           y: 0.05
+  table:
+    style_candidates:
+      - GridTable4
+      - Table Grid
+    fallback_style: Table Grid
+    autofit: false
 ```
 
 ## Advanced Customization

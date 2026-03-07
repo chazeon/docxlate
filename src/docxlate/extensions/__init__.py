@@ -10,9 +10,11 @@ def ensure_config_plugins_registered():
     # Import-time registration for built-in extension-owned config models.
     from .bibliography import register_plugin as register_bibliography_plugin
     from .figure import register_plugin as register_figure_plugin
+    from .table import register_plugin as register_table_plugin
 
     register_bibliography_plugin()
     register_figure_plugin()
+    register_table_plugin()
 
 
 __all__ = [

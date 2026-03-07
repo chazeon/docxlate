@@ -1,5 +1,10 @@
 from __future__ import annotations
 
-from .runtime import register
+from .plugin import TABLE_PLUGIN, register_plugin
 
-__all__ = ["register"]
+
+def register(latex):
+    return TABLE_PLUGIN.register_runtime(latex)
+
+
+__all__ = ["register", "register_plugin"]

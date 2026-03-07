@@ -43,11 +43,11 @@ As of March 6, 2026, the following decisions are locked:
   - [x] Complete **Audit Plan: Bibliography Artifact Ownership** below.
   - [x] Remove duplicated `.aux` parsing passes and clarify module boundaries.
 
-- [ ] Priority 4: Table MVP (after Priority 1 + 2 + 3)
-  - [ ] Native `tabular` -> Word table rendering.
-  - [ ] Template-aware table style resolution + deterministic fallback.
-  - [ ] In-cell text/math/image rendering via existing pipelines.
-  - [ ] `table` caption/label with `.aux` number resolution.
+- [x] Priority 4: Table MVP (after Priority 1 + 2 + 3)
+  - [x] Native `tabular` -> Word table rendering.
+  - [x] Template-aware table style resolution + deterministic fallback.
+  - [x] In-cell text/math/image rendering via existing pipelines.
+  - [x] `table` caption/label with `.aux` number resolution.
 
 - [ ] Priority 5: Table Structural Expansion
   - [ ] `multicolumn` horizontal merging.
@@ -221,8 +221,8 @@ Move color-related macro classes and handler registration into a dedicated exten
   - [x] declaration-style color application in core (temporary during extraction)
   - [x] command-level color handlers in extension (target ownership)
 - [ ] Mark current table status explicitly:
-  - [ ] MacroSpec stubs are present
-  - [ ] native DOCX table rendering not yet implemented
+  - [x] MacroSpec-backed table handlers are present (`table`/`tabular` render, `multicolumn` stub)
+  - [x] native DOCX table rendering is implemented for MVP
 - [ ] Document global singleton/runtime state expectations:
   - [ ] shared `latex` bridge instance
   - [ ] required reset behavior in tests and CLI runs

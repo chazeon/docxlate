@@ -5,7 +5,6 @@ from plasTeX import Command, Environment
 
 from docxlate.core import LatexBridge
 from docxlate.handlers import latex
-from docxlate.extensions.table.runtime import table_specs
 from docxlate.registry import MacroSpec
 
 
@@ -139,14 +138,17 @@ def test_validate_macro_registry_detects_wiring_drift():
         bridge.validate_macro_registry()
 
 
-def test_table_specs_are_explicit_parse_only_stubs():
-    specs = table_specs()
-    names = {spec.name: spec for spec in specs}
+def test_table_specs_use_render_handlers_for_table_tabular_and_stub_for_multicolumn():
+    table_spec = latex.macro_specs["table"]
+    tabular_spec = latex.macro_specs["tabular"]
+    multicolumn_spec = latex.macro_specs["multicolumn"]
 
-    assert set(names.keys()) == {"table", "tabular", "multicolumn"}
-    assert all(spec.policy == "stub" for spec in specs)
-    assert all(spec.parse_class is not None for spec in specs)
-    assert all(spec.handler is None for spec in specs)
+    assert table_spec.policy == "render"
+    assert tabular_spec.policy == "render"
+    assert multicolumn_spec.policy == "stub"
+    assert table_spec.handler is not None
+    assert tabular_spec.handler is not None
+    assert multicolumn_spec.handler is None
 
 
 def test_command_decorator_can_register_through_macro_spec():

@@ -35,7 +35,13 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
                         "shift": {"y": 0.1},
                     },
                 },
-            }
+            },
+            "table": {
+                "style_candidates": ["GridTable4", "Table Grid"],
+                "fallback_style": "Table Grid",
+                "autofit": False,
+                "header": {"first_row_bold": True},
+            },
         },
     }
     validated = validate_runtime_config(data)
@@ -59,6 +65,10 @@ def test_validate_runtime_config_accepts_core_and_figure_plugin_fields():
     assert validated["plugins"]["figure"]["image"]["wrap"]["inset"]["right"] == 0.02
     assert validated["plugins"]["figure"]["image"]["wrap"]["gap"] == 0.2
     assert validated["plugins"]["figure"]["image"]["wrap"]["shift"]["y"] == 0.1
+    assert validated["plugins"]["table"]["style_candidates"] == ["GridTable4", "Table Grid"]
+    assert validated["plugins"]["table"]["fallback_style"] == "Table Grid"
+    assert validated["plugins"]["table"]["autofit"] is False
+    assert validated["plugins"]["table"]["header"]["first_row_bold"] is True
 
 
 def test_validate_runtime_config_accepts_wrap_caption_anchor_mode():
@@ -88,6 +98,12 @@ def test_validate_runtime_config_rejects_unknown_plugin_namespace():
 def test_validate_runtime_config_rejects_non_mapping_plugin_block():
     with pytest.raises(ValueError):
         validate_runtime_config({"plugins": {"figure": 123}})
+
+
+def test_validate_runtime_config_rejects_unknown_table_plugin_key():
+    with pytest.raises(ValueError) as exc_info:
+        validate_runtime_config({"plugins": {"table": {"unknown_field": True}}})
+    assert "plugins.table.unknown_field: Extra inputs are not permitted" in str(exc_info.value)
 
 
 def test_validate_runtime_config_unknown_plugin_key_shows_available_keys():
