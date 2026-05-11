@@ -6,6 +6,7 @@ from .extensions import (
     register_figures_extension,
     register_hyperref_extension,
     register_lists_extension,
+    register_newtx_extension,
     register_table_extension,
     register_xcolor_extension,
 )
@@ -24,6 +25,7 @@ from plasTeX.Base.LaTeX.Sectioning import subsubsection as plastex_subsubsection
 latex = LatexBridge()
 register_hyperref_extension(latex)
 register_lists_extension(latex)
+register_newtx_extension(latex)
 register_table_extension(latex)
 register_xcolor_extension(latex)
 register_figures_extension(latex)

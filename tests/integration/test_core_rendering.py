@@ -267,6 +267,24 @@ def test_parse_retries_with_xcolor_skipped_before_body_fallback():
     assert not any("body-only parse fallback" in w for w in warnings)
 
 
+def test_parse_skips_newtx_stack_for_parser_compatibility():
+    tex = r"""
+\documentclass{article}
+\usepackage[T1]{fontenc}
+\usepackage{newtx}
+\begin{document}
+Hello newtx path.
+\end{document}
+"""
+    latex.run(tex)
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "Hello newtx path." in text
+    warnings = latex.context.get("warnings", [])
+    assert any("Skipped usepackage for parser compatibility: newtx" in w for w in warnings)
+    assert not any("body-only parse fallback" in w for w in warnings)
+
+
 def test_preamble_only_parse_with_text_nodes_triggers_body_fallback():
     # Combination crafted to produce noisy preamble parse while leaving body intact.
     tex = r"""

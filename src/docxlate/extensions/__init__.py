@@ -4,6 +4,7 @@ from .figure import register as register_figures_extension
 from .lists import register as register_lists_extension
 from .table import register as register_table_extension
 from .xcolor import register as register_xcolor_extension
+from .newtx import register as register_newtx_extension
 
 
 def ensure_config_plugins_registered():
@@ -24,5 +25,6 @@ __all__ = [
     "register_lists_extension",
     "register_table_extension",
     "register_xcolor_extension",
+    "register_newtx_extension",
     "ensure_config_plugins_registered",
 ]
