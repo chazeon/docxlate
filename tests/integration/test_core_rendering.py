@@ -32,6 +32,18 @@ def test_inline_formatting_bold_italic():
     assert any(run.italic for run in para.runs)
 
 
+def test_latex_aa_macro_renders_unicode_capital_a_with_ring():
+    latex.run(r"Angstrom: \AA.")
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "Angstrom: Å." in text
+    assert r"\AA" not in text
+    assert not any(
+        "Unknown LaTeX command: \\AA" in w
+        for w in latex.context.get("warnings", [])
+    )
+
+
 @pytest.mark.xfail(reason="List environment handling is not implemented yet")
 def test_itemize_nesting_depth_two():
     tex = r"""

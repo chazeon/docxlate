@@ -776,6 +776,7 @@ class LatexBridge:
         if node_name == "active::~":
             return "\u00A0"
         literal_map = {
+            "AA": "Å",
             "%": "%",
             "_": "_",
             "#": "#",
