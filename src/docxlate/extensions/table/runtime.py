@@ -38,6 +38,9 @@ def _node_name(node) -> str:
 
 
 def _split_tabular_rows(nodes: list) -> list[list[list]]:
+    while len(nodes) == 1 and _node_name(nodes[0]) == "par":
+        nodes = list(getattr(nodes[0], "childNodes", []) or [])
+
     rows: list[list[list]] = [[]]
     current_cell: list = []
 

@@ -44,6 +44,14 @@ def test_latex_aa_macro_renders_unicode_capital_a_with_ring():
     )
 
 
+def test_latex_aa_macro_renders_inside_math():
+    latex.run(r"Volume: $180.55~\mathrm{\AA}^{3}$.")
+
+    xml = "\n".join(p._element.xml for p in latex.doc.paragraphs)
+    assert "Å" in xml
+    assert r"\AA" not in xml
+
+
 @pytest.mark.xfail(reason="List environment handling is not implemented yet")
 def test_itemize_nesting_depth_two():
     tex = r"""

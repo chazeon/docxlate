@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
+from types import SimpleNamespace
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from docxlate.handlers import latex
+from docxlate.extensions.table.runtime import _split_tabular_rows
 
 
 def _write_png(path: Path):
@@ -89,6 +91,22 @@ def test_revtex_starred_ruled_table_uses_table_renderer_and_caption():
     text = "\n".join(p.text for p in latex.doc.paragraphs)
     assert "Table 1. RevTeX table" in text
     assert "Figure" not in text
+
+
+def test_revtex_par_wrapped_tabular_keeps_rows_and_columns():
+    amp = SimpleNamespace(nodeName="active::&")
+    row_end = SimpleNamespace(nodeName="\\")
+    wrapper = SimpleNamespace(
+        nodeName="par",
+        childNodes=["A", amp, "B", row_end, "C", amp, "D"],
+    )
+
+    rows = _split_tabular_rows([wrapper])
+
+    assert [["".join(cell) for cell in row] for row in rows] == [
+        ["A", "B"],
+        ["C", "D"],
+    ]
 
 
 def test_tabular_keeps_math_and_image_inside_cells(tmp_path):

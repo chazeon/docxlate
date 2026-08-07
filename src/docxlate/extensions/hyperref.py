@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from urllib.parse import urlparse
 
@@ -40,7 +41,11 @@ class ReferenceResolver:
 
     def _anchor_name(self, label_name: str) -> str:
         clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", label_name).strip("_")
-        return f"ref_{clean or 'target'}"
+        anchor = f"ref_{clean or 'target'}"
+        if len(anchor) <= 40:
+            return anchor
+        suffix = hashlib.blake2s(label_name.encode(), digest_size=4).hexdigest()
+        return f"{anchor[:31]}_{suffix}"
 
     def anchor_name(self, label_name: str) -> str:
         return self._anchor_name(label_name)

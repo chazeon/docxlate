@@ -4,6 +4,7 @@ from docx.shared import RGBColor
 from lxml import etree
 import latex2mathml.converter
 from pathlib import Path
+import re
 from docxlate.model import StyleState
 
 MATHML_NAMESPACE = "http://www.w3.org/1998/Math/MathML"
@@ -43,6 +44,7 @@ def inject_omml(
     style: StyleState | None = None,
 ):
     """Bridge LaTeX math to Word Math (OMML) via the provided stylesheet."""
+    latex_str = re.sub(r"\\AA(?![A-Za-z])", "Å", latex_str)
     try:
         mathml = latex2mathml.converter.convert(latex_str)
         mathml_element = etree.fromstring(mathml.encode("utf-8"))

@@ -19,6 +19,10 @@ class cite(Command):
     args = "bibkeys:str"
 
 
+class citet(Command):
+    args = "bibkeys:str"
+
+
 BIBLIOGRAPHY_MACRO_DEFAULTS: dict[str, str] = {
     "bibrangedash": "\u2013",
     "bibinitperiod": ".",
@@ -114,6 +118,7 @@ def register(latex, *, plugin):
         def _handle_bibliography_macro(_node, _macro_name=macro_name):
             latex.append_inline(plugin.macro_text(latex, _macro_name))
 
+    @latex.command("citet", inline=True, parse_class=citet)
     @latex.command("cite", inline=True, parse_class=cite)
     def handle_cite(node):
         cite_order = latex.context.get("cite_order", {})

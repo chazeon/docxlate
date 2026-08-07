@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 from docxlate.aux import parse_abx_aux_cite_order
 from docxlate.handlers import latex
@@ -124,6 +125,27 @@ def test_references_section_appended_from_bbl(tmp_path):
     assert "ref_bib_KeyB" in xml
     assert "<w:hyperlink" in xml
     assert 'w:anchor="ref_bib_KeyA"' in xml or 'w:anchor="ref_bib_KeyB"' in xml
+
+
+def test_long_citation_key_uses_word_safe_bookmark_name(tmp_path):
+    key = "perdewSelfinteractionCorrectionDensityfunctional1981"
+    tex_path = tmp_path / "doc.tex"
+    tex_path.write_text(rf"See \citet{{{key}}}.")
+    tex_path.with_suffix(".aux").write_text(rf"\abx@aux@cite{{0}}{{{key}}}")
+    tex_path.with_suffix(".bbl").write_text(
+        Path("tests/fixtures/bbl/sample.bbl").read_text().replace("KeyA", key)
+    )
+
+    latex.context["tex_path"] = str(tex_path)
+    latex.run(tex_path.read_text())
+
+    xml = "\n".join(p._element.xml for p in latex.doc.paragraphs)
+    anchors = re.findall(r'w:anchor="([^"]+)"', xml)
+    bookmarks = set(re.findall(r'w:name="([^"]+)"', xml))
+    assert key not in latex.doc.paragraphs[0].text
+    assert anchors
+    assert all(len(anchor) <= 40 for anchor in anchors)
+    assert set(anchors) <= bookmarks
 
 
 def test_references_missing_entry_default_policy_renders_key_row(tmp_path):
