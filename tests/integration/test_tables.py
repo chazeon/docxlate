@@ -75,6 +75,22 @@ def test_table_caption_and_label_register_reference_with_aux_number():
     assert 'w:anchor="ref_tab_demo"' in xml
 
 
+def test_revtex_starred_ruled_table_uses_table_renderer_and_caption():
+    latex.context["refs"] = {"tab:demo": {"ref_num": "1"}}
+    latex.run(
+        r"\begin{table*}"
+        r"\begin{ruledtabular}\begin{tabular}{c c}A & B\\C & D\end{tabular}\end{ruledtabular}"
+        r"\caption{RevTeX table}\label{tab:demo}"
+        r"\end{table*}"
+    )
+
+    assert len(latex.doc.tables) == 1
+    assert len(latex.doc.tables[0].columns) == 2
+    text = "\n".join(p.text for p in latex.doc.paragraphs)
+    assert "Table 1. RevTeX table" in text
+    assert "Figure" not in text
+
+
 def test_tabular_keeps_math_and_image_inside_cells(tmp_path):
     image_path = tmp_path / "sample.png"
     _write_png(image_path)

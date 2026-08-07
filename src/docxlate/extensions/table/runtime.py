@@ -15,12 +15,21 @@ class table(Environment):
     args = "[ position ]"
 
 
+class table_star(Environment):
+    macroName = "table*"
+    args = "[ position ]"
+
+
 class tabular(Environment):
     args = "colspec"
 
 
 class multicolumn(Command):
     args = "cols:str align:str self"
+
+
+class ruledtabular(Environment):
+    pass
 
 
 def _node_name(node) -> str:
@@ -328,6 +337,7 @@ def register(latex, *, plugin):
     def handle_tabular(node):
         _render_tabular(node)
 
+    @latex.env("table*", parse_class=table_star)
     @latex.env("table", parse_class=table)
     def handle_table(node):
         caption_node = None
@@ -376,6 +386,10 @@ def register(latex, *, plugin):
 
         if passthrough_nodes:
             latex.render_nodes(passthrough_nodes)
+
+    @latex.env("ruledtabular", parse_class=ruledtabular)
+    def handle_ruledtabular(node):
+        latex.render_nodes(getattr(node, "childNodes", []) or [])
 
     latex.register_spec(
         MacroSpec(

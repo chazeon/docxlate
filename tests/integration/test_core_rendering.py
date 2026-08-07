@@ -243,6 +243,44 @@ Hello fallback.
     assert not any("maketitle was found" in w for w in warnings)
 
 
+def test_revtex_front_matter_is_deferred_and_keeps_all_authors():
+    tex = r"""
+\begin{document}
+\title{Paper Title}
+\author{Alice\,\orcidlink{0000-0001}}
+\affiliation{University One}
+\author{Bob}
+\email[]{bob@example.com}
+\affiliation{University Two}
+\begin{abstract}Summary first in the source.\end{abstract}
+\maketitle
+Body text.
+\end{document}
+"""
+
+    latex.run(tex)
+
+    nonempty = [p.text for p in latex.doc.paragraphs if p.text.strip()]
+    assert nonempty[0] == "Paper Title"
+    assert "Alice" in nonempty[1] and "Bob" in nonempty[1]
+    assert "University One" in nonempty[2]
+    assert "University Two" in nonempty[3]
+    assert "bob@example.com" in nonempty[4]
+    assert nonempty[5].startswith("Abstract. Summary first")
+    assert nonempty[6].strip() == "Body text."
+
+
+def test_abstract_after_maketitle_still_renders():
+    latex.run(
+        r"\title{Title}\author{Author}\maketitle"
+        r"\begin{abstract}Standard order.\end{abstract}Body."
+    )
+
+    text = "\n".join(p.text for p in latex.doc.paragraphs if p.text.strip())
+    assert "Abstract. Standard order." in text
+    assert "Body." in text
+
+
 def test_parse_skip_packages_avoids_known_preamble_failure():
     tex = r"""
 \documentclass{article}
@@ -361,6 +399,32 @@ def test_paragraph_heading_does_not_double_space_before_body():
     assert para is not None
     assert "Cai-Zhuang Wang  (Ames Laboratory)" not in para.text
     assert "Cai-Zhuang Wang (Ames Laboratory)" in para.text
+
+
+def test_ensuremath_renders_inline_math():
+    latex.run(r"Text \ensuremath{V_{\mathrm{S}}} tail.")
+
+    para = next((p for p in latex.doc.paragraphs if p.text.strip()), None)
+    assert para is not None
+    assert "Text" in para.text
+    assert "tail." in para.text
+    assert "<m:oMath" in para._element.xml
+    assert "ensuremath" not in para.text
+
+
+def test_ensuremath_inside_newcommand_renders_inline_math():
+    latex.run(
+        r"""
+\newcommand{\Vs}{\ensuremath{V_{\mathrm{S}}}}
+\Vs{} value.
+"""
+    )
+
+    para = next((p for p in latex.doc.paragraphs if p.text.strip()), None)
+    assert para is not None
+    assert "value." in para.text
+    assert "<m:oMath" in para._element.xml
+    assert "ensuremath" not in para.text
 
 
 def test_noindent_sets_first_line_indent_on_current_paragraph():

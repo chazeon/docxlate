@@ -14,7 +14,7 @@ from .model import RenderContext
 from pathlib import Path
 from docx.shared import Pt
 import re
-from plasTeX import Command
+from plasTeX import Command, Environment
 from plasTeX.Base.LaTeX.Math import equation as plastex_equation
 from plasTeX.Base.LaTeX.Math import math as plastex_math
 from plasTeX.Base.LaTeX.Sectioning import paragraph as plastex_paragraph
@@ -62,9 +62,33 @@ class Maketitle(Command):
     args = ""
 
 
+class Affiliation(Command):
+    macroName = "affiliation"
+    args = "self"
+
+
+class Email(Command):
+    macroName = "email"
+    args = "[ options ] self"
+
+
+class Orcidlink(Command):
+    macroName = "orcidlink"
+    args = "self"
+
+
+class Abstract(Environment):
+    macroName = "abstract"
+
+
 class Noindent(Command):
     macroName = "noindent"
     args = ""
+
+
+class Ensuremath(Command):
+    macroName = "ensuremath"
+    args = "self"
 
 
 class Indent(Command):
@@ -76,15 +100,23 @@ def _math_node_text(node):
     return latex.get_math_source(node)
 
 
-def _store_front_matter_tex(node, key: str):
+def _front_matter_tex(node) -> str:
     attributes = getattr(node, "attributes", {}) or {}
     fragment = attributes.get("self")
     source = getattr(fragment, "source", None) if fragment is not None else None
     if source is None:
         source = latex.get_arg_text(node, 0, key="self")
-    text = str(source).strip() if source is not None else ""
+    return str(source).strip() if source is not None else ""
+
+
+def _store_front_matter_tex(node, key: str, *, append: bool = False):
+    text = _front_matter_tex(node)
     if text:
-        latex.context[f"_frontmatter_{key}_tex"] = text
+        context_key = f"_frontmatter_{key}_tex"
+        if append:
+            latex.context.setdefault(f"_frontmatter_{key}s_tex", []).append(text)
+        else:
+            latex.context[context_key] = text
 
 
 def _extract_preamble(tex_source: str) -> str:
@@ -175,6 +207,9 @@ def _front_matter_has_content() -> bool:
             "_frontmatter_title_tex",
             "_frontmatter_author_tex",
             "_frontmatter_date_tex",
+            "_frontmatter_authors_tex",
+            "_frontmatter_affiliations_tex",
+            "_frontmatter_abstract_nodes",
         )
     )
 
@@ -205,9 +240,14 @@ def _emit_front_matter(*, prepend: bool = False):
     if latex.context.get("_frontmatter_rendered"):
         return
     title_tex = latex.context.get("_frontmatter_title_tex")
-    author_tex = latex.context.get("_frontmatter_author_tex")
+    authors_tex = latex.context.get("_frontmatter_authors_tex") or []
+    if not authors_tex and latex.context.get("_frontmatter_author_tex"):
+        authors_tex = [latex.context["_frontmatter_author_tex"]]
+    affiliations_tex = latex.context.get("_frontmatter_affiliations_tex") or []
+    emails_tex = latex.context.get("_frontmatter_emails_tex") or []
+    abstract_nodes = latex.context.get("_frontmatter_abstract_nodes") or []
     date_tex = latex.context.get("_frontmatter_date_tex")
-    if not any([title_tex, author_tex, date_tex]):
+    if not any([title_tex, authors_tex, affiliations_tex, abstract_nodes, date_tex]):
         return
 
     created = []
@@ -218,21 +258,41 @@ def _emit_front_matter(*, prepend: bool = False):
         )
         created.append(p_title)
 
-    if author_tex:
+    if authors_tex:
         p_author = latex.add_paragraph_for_role("author")
         latex.context["_in_maketitle_author"] = True
         try:
-            latex.render_latex_fragment(
-                author_tex, paragraph=p_author, style={"theme": "major"}
-            )
+            for index, author_tex in enumerate(authors_tex):
+                if index:
+                    p_author.add_run(", ")
+                latex.render_latex_fragment(
+                    author_tex, paragraph=p_author, style={"theme": "major"}
+                )
         finally:
             latex.context["_in_maketitle_author"] = False
         created.append(p_author)
+
+    for affiliation_tex in affiliations_tex:
+        paragraph = latex.add_paragraph_for_role("author")
+        latex.render_latex_fragment(affiliation_tex, paragraph=paragraph)
+        created.append(paragraph)
+
+    for email_tex in emails_tex:
+        paragraph = latex.add_paragraph_for_role("author")
+        latex.render_latex_fragment(email_tex, paragraph=paragraph)
+        created.append(paragraph)
 
     if date_tex:
         p_date = latex.add_paragraph_for_role("date")
         latex.render_latex_fragment(date_tex, paragraph=p_date)
         created.append(p_date)
+
+    if abstract_nodes:
+        p_abstract = latex.add_paragraph_for_role("body")
+        with latex.render_frame(paragraph=p_abstract):
+            latex.append_inline("Abstract. ", style={"bold": True})
+            latex.render_nodes(abstract_nodes)
+        created.append(p_abstract)
 
     if prepend and created:
         _prepend_paragraphs(created)
@@ -283,7 +343,36 @@ def handle_title(node):
 
 @latex.command("author", inline=True, parse_class=Author)
 def handle_author(node):
-    _store_front_matter_tex(node, "author")
+    _store_front_matter_tex(node, "author", append=True)
+
+
+@latex.command("affiliation", inline=True, parse_class=Affiliation)
+def handle_affiliation(node):
+    _store_front_matter_tex(node, "affiliation", append=True)
+
+
+@latex.command("email", inline=True, parse_class=Email)
+def handle_email(node):
+    _store_front_matter_tex(node, "email", append=True)
+
+
+@latex.command("orcidlink", inline=True, parse_class=Orcidlink)
+def handle_orcidlink(node):
+    value = _front_matter_tex(node)
+    if value:
+        latex.append_inline(f" (ORCID: {value})")
+
+
+@latex.env("abstract", parse_class=Abstract)
+def handle_abstract(node):
+    nodes = list(getattr(node, "childNodes", []) or [])
+    if latex.context.get("_frontmatter_maketitle_seen"):
+        paragraph = latex.add_paragraph_for_role("body")
+        with latex.render_frame(paragraph=paragraph):
+            latex.append_inline("Abstract. ", style={"bold": True})
+            latex.render_nodes(nodes)
+        return
+    latex.context["_frontmatter_abstract_nodes"] = nodes
 
 
 @latex.command("date", inline=True, parse_class=Date)
@@ -392,13 +481,20 @@ def handle_math(node):
 @latex.on("load")
 def on_load(tex_source, soup):
     """Parse .aux data for citation handling when available."""
+    for key in (
+        "_frontmatter_authors_tex",
+        "_frontmatter_affiliations_tex",
+        "_frontmatter_emails_tex",
+        "_frontmatter_abstract_nodes",
+    ):
+        latex.context.pop(key, None)
+    latex.context["_frontmatter_rendered"] = False
+    latex.context["_frontmatter_maketitle_seen"] = False
     _populate_front_matter_from_source(tex_source)
     tex_path = latex.context.get("tex_path")
     if not tex_path:
         return
     latex.context["refs"] = {}
-    latex.context["_frontmatter_rendered"] = False
-    latex.context["_frontmatter_maketitle_seen"] = False
     aux_path = Path(tex_path).with_suffix(".aux")
     if aux_path.exists():
         aux_cache = latex.context.setdefault("_aux_artifacts_cache", {})
@@ -448,3 +544,10 @@ def handle_inline_dollar_math(node):
 @latex.command("math", inline=True, parse_class=plastex_math)
 def handle_inline_paren_math(node):
     latex.append_math(_math_node_text(node))
+
+
+@latex.command("ensuremath", inline=True, parse_class=Ensuremath)
+def handle_ensuremath(node):
+    source = latex.get_arg_text(node, 0, key="self")
+    if source:
+        latex.append_math(source)
